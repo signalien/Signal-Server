@@ -13,6 +13,7 @@ import org.whispersystems.textsecuregcm.WhisperServerConfiguration;
 import org.whispersystems.textsecuregcm.configuration.DatabaseConfiguration;
 import org.whispersystems.textsecuregcm.storage.Accounts;
 import org.whispersystems.textsecuregcm.storage.FaultTolerantDatabase;
+import org.whispersystems.textsecuregcm.storage.Keys;
 import org.whispersystems.textsecuregcm.storage.Messages;
 import org.whispersystems.textsecuregcm.storage.PendingAccounts;
 
@@ -44,6 +45,7 @@ public class VacuumCommand extends ConfiguredCommand<WhisperServerConfiguration>
     FaultTolerantDatabase messageDatabase = new FaultTolerantDatabase("message_database_vacuum", messageJdbi, messageDbConfig.getCircuitBreakerConfiguration());
 
     Accounts        accounts        = new Accounts(accountDatabase);
+    Keys            keys            = new Keys(accountDatabase, config.getAccountsDatabaseConfiguration().getKeyOperationRetryConfiguration());
     PendingAccounts pendingAccounts = new PendingAccounts(accountDatabase);
     Messages        messages        = new Messages(messageDatabase);
 
@@ -52,6 +54,9 @@ public class VacuumCommand extends ConfiguredCommand<WhisperServerConfiguration>
 
     logger.info("Vacuuming pending_accounts...");
     pendingAccounts.vacuum();
+
+    logger.info("Vacuuming keys...");
+    keys.vacuum();
 
     logger.info("Vacuuming messages...");
     messages.vacuum();

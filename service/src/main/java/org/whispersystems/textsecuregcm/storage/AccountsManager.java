@@ -58,6 +58,7 @@ public class AccountsManager {
   private final FaultTolerantRedisCluster cacheCluster;
   private final DirectoryManager          directory;
   private final DirectoryQueue            directoryQueue;
+  private final Keys                      keys;
   private final KeysDynamoDb              keysDynamoDb;
   private final MessagesManager           messagesManager;
   private final UsernamesManager          usernamesManager;
@@ -79,13 +80,14 @@ public class AccountsManager {
   }
 
   public AccountsManager(Accounts accounts, DirectoryManager directory, FaultTolerantRedisCluster cacheCluster, final DirectoryQueue directoryQueue,
-      final KeysDynamoDb keysDynamoDb, final MessagesManager messagesManager, final UsernamesManager usernamesManager,
+      final Keys keys, final KeysDynamoDb keysDynamoDb, final MessagesManager messagesManager, final UsernamesManager usernamesManager,
       final ProfilesManager profilesManager, final SecureStorageClient secureStorageClient,
       final SecureBackupClient secureBackupClient) {
     this.accounts            = accounts;
     this.directory           = directory;
     this.cacheCluster        = cacheCluster;
     this.directoryQueue      = directoryQueue;
+    this.keys                = keys;
     this.keysDynamoDb        = keysDynamoDb;
     this.messagesManager     = messagesManager;
     this.usernamesManager    = usernamesManager;
@@ -163,10 +165,11 @@ public class AccountsManager {
       directoryQueue.deleteAccount(account);
       directory.remove(account.getNumber());
       profilesManager.deleteAll(account.getUuid());
-      keysDynamoDb.delete(account);
       if (Constants.DYNAMO_DB) {
+        keysDynamoDb.delete(account);
         messagesManager.clear(account.getUuid());
       } else {
+        keys.delete(account);
         messagesManager.clear(account.getNumber(), account.getUuid());
       }
 

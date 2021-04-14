@@ -149,6 +149,7 @@ import org.whispersystems.textsecuregcm.storage.DirectoryReconciler;
 import org.whispersystems.textsecuregcm.storage.DirectoryReconciliationClient;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.FaultTolerantDatabase;
+import org.whispersystems.textsecuregcm.storage.Keys;
 import org.whispersystems.textsecuregcm.storage.KeysDynamoDb;
 import org.whispersystems.textsecuregcm.storage.MessagePersister;
 import org.whispersystems.textsecuregcm.storage.Messages;
@@ -288,7 +289,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
             .withCredentials(InstanceProfileCredentialsProvider.getInstance());
 
     DynamoDB messageDynamoDb = Constants.DYNAMO_DB ? new DynamoDB(messageDynamoDbClientBuilder.build()) : null;
-    DynamoDB preKeyDynamoDb = new DynamoDB(keysDynamoDbClientBuilder.build());
+    DynamoDB preKeyDynamoDb = Constants.DYNAMO_DB ? new DynamoDB(keysDynamoDbClientBuilder.build()) : null;
 
     Accounts          accounts          = new Accounts(accountDatabase);
     PendingAccounts   pendingAccounts   = new PendingAccounts(accountDatabase);
@@ -296,7 +297,8 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     Usernames         usernames         = new Usernames(accountDatabase);
     ReservedUsernames reservedUsernames = new ReservedUsernames(accountDatabase);
     Profiles          profiles          = new Profiles(accountDatabase);
-    KeysDynamoDb      keysDynamoDb      = new KeysDynamoDb(preKeyDynamoDb, config.getKeysDynamoDbConfiguration().getTableName());
+    Keys              keys              = new Keys(accountDatabase, config.getAccountsDatabaseConfiguration().getKeyOperationRetryConfiguration());
+    KeysDynamoDb      keysDynamoDb      = Constants.DYNAMO_DB ? new KeysDynamoDb(preKeyDynamoDb, config.getKeysDynamoDbConfiguration().getTableName()) : null;
     MessagesDynamoDb  messagesDynamoDb  = Constants.DYNAMO_DB ? new MessagesDynamoDb(messageDynamoDb, config.getMessageDynamoDbConfiguration().getTableName(), config.getMessageDynamoDbConfiguration().getTimeToLive()) : null;
     Messages          messages          = new Messages(messageDatabase);
     AbusiveHostRules  abusiveHostRules  = new AbusiveHostRules(abuseDatabase);
@@ -362,7 +364,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     MessagesCache              messagesCache              = new MessagesCache(messagesCluster, messagesCluster, keyspaceNotificationDispatchExecutor);
     PushLatencyManager         pushLatencyManager         = new PushLatencyManager(metricsCluster);
     MessagesManager            messagesManager            = new MessagesManager(messages, messagesDynamoDb, messagesCache, pushLatencyManager);
-    AccountsManager            accountsManager            = new AccountsManager(accounts, directory, cacheCluster, directoryQueue, keysDynamoDb, messagesManager, usernamesManager, profilesManager, secureStorageClient, secureBackupClient);
+    AccountsManager            accountsManager            = new AccountsManager(accounts, directory, cacheCluster, directoryQueue, keys, keysDynamoDb, messagesManager, usernamesManager, profilesManager, secureStorageClient, secureBackupClient);
     RemoteConfigsManager       remoteConfigsManager       = new RemoteConfigsManager(remoteConfigs);
     DeadLetterHandler          deadLetterHandler          = new DeadLetterHandler(accountsManager, messagesManager);
     DispatchManager            dispatchManager            = new DispatchManager(pubSubClientFactory, Optional.of(deadLetterHandler));
@@ -429,7 +431,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     AttachmentControllerV1 attachmentControllerV1    = new AttachmentControllerV1(rateLimiters, config.getAwsAttachmentsConfiguration().getAccessKey(), config.getAwsAttachmentsConfiguration().getAccessSecret(), config.getAwsAttachmentsConfiguration().getBucket());
     AttachmentControllerV2 attachmentControllerV2    = new AttachmentControllerV2(rateLimiters, config.getAwsAttachmentsConfiguration().getAccessKey(), config.getAwsAttachmentsConfiguration().getAccessSecret(), config.getAwsAttachmentsConfiguration().getRegion(), config.getAwsAttachmentsConfiguration().getBucket());
     AttachmentControllerV3 attachmentControllerV3    = new AttachmentControllerV3(rateLimiters, config.getGcpAttachmentsConfiguration().getDomain(), config.getGcpAttachmentsConfiguration().getEmail(), config.getGcpAttachmentsConfiguration().getMaxSizeInBytes(), config.getGcpAttachmentsConfiguration().getPathPrefix(), config.getGcpAttachmentsConfiguration().getRsaSigningKey());
-    KeysController         keysController            = new KeysController(rateLimiters, keysDynamoDb, accountsManager, directoryQueue);
+    KeysController         keysController            = new KeysController(rateLimiters, keys, keysDynamoDb, accountsManager, directoryQueue);
     MessageController      messageController         = new MessageController(rateLimiters, messageSender, receiptSender, accountsManager, messagesManager, apnFallbackManager, dynamicConfigurationManager, metricsCluster, declinedMessageReceiptExecutor);
     ProfileController      profileController         = new ProfileController(rateLimiters, accountsManager, profilesManager, usernamesManager, dynamicConfigurationManager, cdnS3Client, profileCdnPolicyGenerator, profileCdnPolicySigner, config.getCdnConfiguration().getBucket(), zkProfileOperations, isZkEnabled);
     StickerController      stickerController         = new StickerController(rateLimiters, config.getCdnConfiguration().getAccessKey(), config.getCdnConfiguration().getAccessSecret(), config.getCdnConfiguration().getRegion(), config.getCdnConfiguration().getBucket());

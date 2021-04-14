@@ -15,6 +15,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import javax.validation.Valid;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -41,7 +42,10 @@ import org.whispersystems.textsecuregcm.sqs.DirectoryQueue;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
+import org.whispersystems.textsecuregcm.storage.KeyRecord;
+import org.whispersystems.textsecuregcm.storage.Keys;
 import org.whispersystems.textsecuregcm.storage.KeysDynamoDb;
+import org.whispersystems.textsecuregcm.util.Constants;
 import org.whispersystems.textsecuregcm.util.Util;
 
 @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
@@ -49,6 +53,7 @@ import org.whispersystems.textsecuregcm.util.Util;
 public class KeysController {
 
   private final RateLimiters                rateLimiters;
+  private final Keys                        keys;
   private final KeysDynamoDb                keysDynamoDb;
   private final AccountsManager             accounts;
   private final DirectoryQueue              directoryQueue;
@@ -59,8 +64,9 @@ public class KeysController {
   private static final String SOURCE_COUNTRY_TAG_NAME = "sourceCountry";
   private static final String PREKEY_TARGET_IDENTIFIER_TAG_NAME =  "identifierType";
 
-  public KeysController(RateLimiters rateLimiters, KeysDynamoDb keysDynamoDb, AccountsManager accounts, DirectoryQueue directoryQueue) {
+  public KeysController(RateLimiters rateLimiters, Keys keys, KeysDynamoDb keysDynamoDb, AccountsManager accounts, DirectoryQueue directoryQueue) {
     this.rateLimiters                = rateLimiters;
+    this.keys                        = keys;
     this.keysDynamoDb                = keysDynamoDb;
     this.accounts                    = accounts;
     this.directoryQueue              = directoryQueue;
@@ -69,7 +75,8 @@ public class KeysController {
   @GET
   @Produces(MediaType.APPLICATION_JSON)
   public PreKeyCount getStatus(@Auth Account account) {
-    int count = keysDynamoDb.getCount(account, account.getAuthenticatedDevice().get().getId());
+    int count = Constants.DYNAMO_DB ? keysDynamoDb.getCount(account, account.getAuthenticatedDevice().get().getId())
+                                    : keys.getCount(account, account.getAuthenticatedDevice().get().getId());
 
     if (count > 0) {
       count = count - 1;
@@ -105,7 +112,11 @@ public class KeysController {
       }
     }
 
-    keysDynamoDb.store(account, device.getId(), preKeys.getPreKeys());
+    if (Constants.DYNAMO_DB) {
+      keysDynamoDb.store(account, device.getId(), preKeys.getPreKeys());
+    } else {
+      keys.store(account, device.getId(), preKeys.getPreKeys());
+    }
   }
 
   @Timed
@@ -190,14 +201,22 @@ public class KeysController {
   private Map<Long, PreKey> getLocalKeys(Account destination, String deviceIdSelector) {
     try {
       if (deviceIdSelector.equals("*")) {
-        return keysDynamoDb.take(destination);
+        if (Constants.DYNAMO_DB) {
+          return keysDynamoDb.take(destination);
+        } else {
+          return keys.take(destination).stream().collect(Collectors.toMap(KeyRecord::getDeviceId, keyRecord -> new PreKey(keyRecord.getKeyId(), keyRecord.getPublicKey())));
+        }
       }
 
       long deviceId = Long.parseLong(deviceIdSelector);
 
-      return keysDynamoDb.take(destination, deviceId)
-              .map(preKey -> Map.of(deviceId, preKey))
-              .orElse(Collections.emptyMap());
+      if (Constants.DYNAMO_DB) {
+        return keysDynamoDb.take(destination, deviceId)
+                           .map(preKey -> Map.of(deviceId, preKey))
+                           .orElse(Collections.emptyMap());
+      } else {
+        return keys.take(destination, deviceId).stream().collect(Collectors.toMap(KeyRecord::getDeviceId, keyRecord -> new PreKey(keyRecord.getKeyId(), keyRecord.getPublicKey())));
+      }
     } catch (NumberFormatException e) {
       throw new WebApplicationException(Response.status(422).build());
     }
