@@ -40,6 +40,7 @@ import org.whispersystems.textsecuregcm.storage.DirectoryManager;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.FaultTolerantDatabase;
 import org.whispersystems.textsecuregcm.storage.KeysDynamoDb;
+import org.whispersystems.textsecuregcm.storage.Messages;
 import org.whispersystems.textsecuregcm.storage.MessagesCache;
 import org.whispersystems.textsecuregcm.storage.MessagesDynamoDb;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
@@ -48,6 +49,7 @@ import org.whispersystems.textsecuregcm.storage.ProfilesManager;
 import org.whispersystems.textsecuregcm.storage.ReservedUsernames;
 import org.whispersystems.textsecuregcm.storage.Usernames;
 import org.whispersystems.textsecuregcm.storage.UsernamesManager;
+import org.whispersystems.textsecuregcm.util.Constants;
 
 public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfiguration> {
 
@@ -86,7 +88,9 @@ public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfigura
 
       JdbiFactory           jdbiFactory                 = new JdbiFactory();
       Jdbi                  accountJdbi                 = jdbiFactory.build(environment, configuration.getAccountsDatabaseConfiguration(), "accountdb");
+      Jdbi                  messageJdbi                 = jdbiFactory.build(environment, configuration.getMessageStoreConfiguration(), "messagedb");
       FaultTolerantDatabase accountDatabase             = new FaultTolerantDatabase("account_database_delete_user", accountJdbi, configuration.getAccountsDatabaseConfiguration().getCircuitBreakerConfiguration());
+      FaultTolerantDatabase messageDatabase             = new FaultTolerantDatabase("message_database", messageJdbi, configuration.getMessageStoreConfiguration().getCircuitBreakerConfiguration());
       ClientResources       redisClusterClientResources = ClientResources.builder().build();
 
       AmazonDynamoDBClientBuilder clientBuilder = AmazonDynamoDBClientBuilder
@@ -103,7 +107,7 @@ public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfigura
                                                                 .withRequestTimeout((int) configuration.getKeysDynamoDbConfiguration().getClientRequestTimeout().toMillis()))
               .withCredentials(InstanceProfileCredentialsProvider.getInstance());
 
-      DynamoDB messageDynamoDb = new DynamoDB(clientBuilder.build());
+      DynamoDB messageDynamoDb = Constants.DYNAMO_DB ? new DynamoDB(clientBuilder.build()) : null;
       DynamoDB preKeysDynamoDb = new DynamoDB(keysDynamoDbClientBuilder.build());
 
       FaultTolerantRedisCluster cacheCluster = new FaultTolerantRedisCluster("main_cache_cluster", configuration.getCacheClusterConfiguration(), redisClusterClientResources);
@@ -121,8 +125,9 @@ public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfigura
       Usernames                 usernames            = new Usernames(accountDatabase);
       Profiles                  profiles             = new Profiles(accountDatabase);
       ReservedUsernames         reservedUsernames    = new ReservedUsernames(accountDatabase);
+      Messages                  messages             = new Messages(messageDatabase);
       KeysDynamoDb              keysDynamoDb         = new KeysDynamoDb(preKeysDynamoDb, configuration.getKeysDynamoDbConfiguration().getTableName());
-      MessagesDynamoDb          messagesDynamoDb     = new MessagesDynamoDb(messageDynamoDb, configuration.getMessageDynamoDbConfiguration().getTableName(), configuration.getMessageDynamoDbConfiguration().getTimeToLive());
+      MessagesDynamoDb          messagesDynamoDb     = Constants.DYNAMO_DB ? new MessagesDynamoDb(messageDynamoDb, configuration.getMessageDynamoDbConfiguration().getTableName(), configuration.getMessageDynamoDbConfiguration().getTimeToLive()) : null;
       ReplicatedJedisPool       redisClient          = new RedisClientFactory("directory_cache_delete_command", configuration.getDirectoryConfiguration().getRedisConfiguration().getUrl(), configuration.getDirectoryConfiguration().getRedisConfiguration().getReplicaUrls(), configuration.getDirectoryConfiguration().getRedisConfiguration().getCircuitBreakerConfiguration()).getRedisClientPool();
       FaultTolerantRedisCluster messageInsertCacheCluster = new FaultTolerantRedisCluster("message_insert_cluster", configuration.getMessageCacheConfiguration().getRedisClusterConfiguration(), redisClusterClientResources);
       FaultTolerantRedisCluster messageReadDeleteCluster = new FaultTolerantRedisCluster("message_read_delete_cluster", configuration.getMessageCacheConfiguration().getRedisClusterConfiguration(), redisClusterClientResources);
@@ -135,7 +140,7 @@ public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfigura
       DirectoryManager          directory            = new DirectoryManager(redisClient);
       UsernamesManager          usernamesManager     = new UsernamesManager(usernames, reservedUsernames, cacheCluster);
       ProfilesManager           profilesManager      = new ProfilesManager(profiles, cacheCluster);
-      MessagesManager           messagesManager      = new MessagesManager(messagesDynamoDb, messagesCache, pushLatencyManager);
+      MessagesManager           messagesManager      = new MessagesManager(messages, messagesDynamoDb, messagesCache, pushLatencyManager);
       AccountsManager           accountsManager      = new AccountsManager(accounts, directory, cacheCluster, directoryQueue, keysDynamoDb, messagesManager, usernamesManager, profilesManager, secureStorageClient, secureBackupClient);
 
       for (String user: users) {

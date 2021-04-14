@@ -352,7 +352,7 @@
     </changeSet>
 
     <changeSet id="21" author="ehren">
-        <dropTable tableName="messages"/>
+<!--        <dropTable tableName="messages"/>-->
     </changeSet>
 
     <changeSet id="22" author="jon">

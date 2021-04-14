@@ -151,6 +151,7 @@ import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.FaultTolerantDatabase;
 import org.whispersystems.textsecuregcm.storage.KeysDynamoDb;
 import org.whispersystems.textsecuregcm.storage.MessagePersister;
+import org.whispersystems.textsecuregcm.storage.Messages;
 import org.whispersystems.textsecuregcm.storage.MessagesCache;
 import org.whispersystems.textsecuregcm.storage.MessagesDynamoDb;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
@@ -206,6 +207,12 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
       }
     });
 
+    bootstrap.addBundle(new NameableMigrationsBundle<WhisperServerConfiguration>("messagedb", "messagedb.xml") {
+      @Override
+      public DataSourceFactory getDataSourceFactory(WhisperServerConfiguration configuration) {
+        return configuration.getMessageStoreConfiguration();
+      }
+    });
 
     bootstrap.addBundle(new NameableMigrationsBundle<WhisperServerConfiguration>("abusedb", "abusedb.xml") {
       @Override
@@ -259,9 +266,11 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
 
     JdbiFactory jdbiFactory = new JdbiFactory(DefaultNameStrategy.CHECK_EMPTY);
     Jdbi        accountJdbi = jdbiFactory.build(environment, config.getAccountsDatabaseConfiguration(), "accountdb");
+    Jdbi        messageJdbi = jdbiFactory.build(environment, config.getMessageStoreConfiguration(), "messagedb");
     Jdbi        abuseJdbi   = jdbiFactory.build(environment, config.getAbuseDatabaseConfiguration(), "abusedb"  );
 
     FaultTolerantDatabase accountDatabase = new FaultTolerantDatabase("accounts_database", accountJdbi, config.getAccountsDatabaseConfiguration().getCircuitBreakerConfiguration());
+    FaultTolerantDatabase messageDatabase = new FaultTolerantDatabase("message_database", messageJdbi, config.getMessageStoreConfiguration().getCircuitBreakerConfiguration());
     FaultTolerantDatabase abuseDatabase   = new FaultTolerantDatabase("abuse_database", abuseJdbi, config.getAbuseDatabaseConfiguration().getCircuitBreakerConfiguration());
 
     AmazonDynamoDBClientBuilder messageDynamoDbClientBuilder = AmazonDynamoDBClientBuilder
@@ -278,7 +287,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
                                                               .withRequestTimeout((int) config.getKeysDynamoDbConfiguration().getClientRequestTimeout().toMillis()))
             .withCredentials(InstanceProfileCredentialsProvider.getInstance());
 
-    DynamoDB messageDynamoDb = new DynamoDB(messageDynamoDbClientBuilder.build());
+    DynamoDB messageDynamoDb = Constants.DYNAMO_DB ? new DynamoDB(messageDynamoDbClientBuilder.build()) : null;
     DynamoDB preKeyDynamoDb = new DynamoDB(keysDynamoDbClientBuilder.build());
 
     Accounts          accounts          = new Accounts(accountDatabase);
@@ -288,7 +297,8 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     ReservedUsernames reservedUsernames = new ReservedUsernames(accountDatabase);
     Profiles          profiles          = new Profiles(accountDatabase);
     KeysDynamoDb      keysDynamoDb      = new KeysDynamoDb(preKeyDynamoDb, config.getKeysDynamoDbConfiguration().getTableName());
-    MessagesDynamoDb  messagesDynamoDb  = new MessagesDynamoDb(messageDynamoDb, config.getMessageDynamoDbConfiguration().getTableName(), config.getMessageDynamoDbConfiguration().getTimeToLive());
+    MessagesDynamoDb  messagesDynamoDb  = Constants.DYNAMO_DB ? new MessagesDynamoDb(messageDynamoDb, config.getMessageDynamoDbConfiguration().getTableName(), config.getMessageDynamoDbConfiguration().getTimeToLive()) : null;
+    Messages          messages          = new Messages(messageDatabase);
     AbusiveHostRules  abusiveHostRules  = new AbusiveHostRules(abuseDatabase);
     RemoteConfigs     remoteConfigs     = new RemoteConfigs(accountDatabase);
 
@@ -351,7 +361,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     ProfilesManager            profilesManager            = new ProfilesManager(profiles, cacheCluster);
     MessagesCache              messagesCache              = new MessagesCache(messagesCluster, messagesCluster, keyspaceNotificationDispatchExecutor);
     PushLatencyManager         pushLatencyManager         = new PushLatencyManager(metricsCluster);
-    MessagesManager            messagesManager            = new MessagesManager(messagesDynamoDb, messagesCache, pushLatencyManager);
+    MessagesManager            messagesManager            = new MessagesManager(messages, messagesDynamoDb, messagesCache, pushLatencyManager);
     AccountsManager            accountsManager            = new AccountsManager(accounts, directory, cacheCluster, directoryQueue, keysDynamoDb, messagesManager, usernamesManager, profilesManager, secureStorageClient, secureBackupClient);
     RemoteConfigsManager       remoteConfigsManager       = new RemoteConfigsManager(remoteConfigs);
     DeadLetterHandler          deadLetterHandler          = new DeadLetterHandler(accountsManager, messagesManager);

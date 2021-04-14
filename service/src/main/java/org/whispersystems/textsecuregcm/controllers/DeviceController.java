@@ -25,6 +25,7 @@ import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.Device.DeviceCapabilities;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
 import org.whispersystems.textsecuregcm.storage.PendingDevicesManager;
+import org.whispersystems.textsecuregcm.util.Constants;
 import org.whispersystems.textsecuregcm.util.Util;
 import org.whispersystems.textsecuregcm.util.VerificationCode;
 import org.whispersystems.textsecuregcm.util.ua.UnrecognizedUserAgentException;
@@ -102,7 +103,11 @@ public class DeviceController {
     account.removeDevice(deviceId);
     accounts.update(account);
     directoryQueue.refreshRegisteredUser(account);
-    messages.clear(account.getUuid(), deviceId);
+    if (Constants.DYNAMO_DB) {
+      messages.clear(account.getUuid(), deviceId);
+    } else {
+      messages.clear(account.getNumber(), account.getUuid(), deviceId);
+    }
   }
 
   @Timed
@@ -196,7 +201,11 @@ public class DeviceController {
       device.setCapabilities(accountAttributes.getCapabilities());
 
       account.get().addDevice(device);
-      messages.clear(account.get().getUuid(), device.getId());
+      if (Constants.DYNAMO_DB) {
+        messages.clear(account.get().getUuid(), device.getId());
+      } else {
+        messages.clear(account.get().getNumber(), account.get().getUuid(), device.getId());
+      }
       accounts.update(account.get());
 
       pendingDevices.remove(number);

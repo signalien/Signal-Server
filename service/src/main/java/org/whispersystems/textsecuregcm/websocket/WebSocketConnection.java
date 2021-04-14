@@ -168,7 +168,11 @@ public class WebSocketConnection implements MessageAvailabilityListener, Displac
       if (throwable == null) {
         if (isSuccessResponse(response)) {
           if (storedMessageInfo.isPresent()) {
-            messagesManager.delete(account.getUuid(), device.getId(), storedMessageInfo.get().getGuid());
+            if (Constants.DYNAMO_DB) {
+              messagesManager.delete(account.getUuid(), device.getId(), storedMessageInfo.get().getGuid());
+            } else {
+              messagesManager.delete(account.getNumber(), account.getUuid(), device.getId(), storedMessageInfo.get().id, storedMessageInfo.get().cached);
+            }
           }
 
           if (message.getType() != Envelope.Type.RECEIPT) {
@@ -266,8 +270,9 @@ public class WebSocketConnection implements MessageAvailabilityListener, Displac
 
   private void sendNextMessagePage(final boolean cachedMessagesOnly, final CompletableFuture<Void> queueClearedFuture) {
     try {
-      final OutgoingMessageEntityList messages = messagesManager
-          .getMessagesForDevice(account.getUuid(), device.getId(), client.getUserAgent(), cachedMessagesOnly);
+      final OutgoingMessageEntityList messages = Constants.DYNAMO_DB ?
+          messagesManager.getMessagesForDevice(account.getUuid(), device.getId(), client.getUserAgent(), cachedMessagesOnly) :
+          messagesManager.getMessagesForDevice(account.getNumber(), account.getUuid(), device.getId(), client.getUserAgent(), cachedMessagesOnly);
 
       final CompletableFuture<?>[] sendFutures = new CompletableFuture[messages.getMessages().size()];
 
@@ -301,12 +306,20 @@ public class WebSocketConnection implements MessageAvailabilityListener, Displac
         final Envelope envelope = builder.build();
 
         if (envelope.getSerializedSize() > MAX_DESKTOP_MESSAGE_SIZE && isDesktopClient) {
-          messagesManager.delete(account.getUuid(), device.getId(), message.getGuid());
+          if (Constants.DYNAMO_DB) {
+            messagesManager.delete(account.getUuid(), device.getId(), message.getGuid());
+          } else {
+            messagesManager.delete(account.getNumber(), account.getUuid(), device.getId(), message.getId(), message.isCached());
+          }
           discardedMessagesMeter.mark();
 
           sendFutures[i] = CompletableFuture.completedFuture(null);
         } else {
-          sendFutures[i] = sendMessage(builder.build(), Optional.of(new StoredMessageInfo(message.getGuid())));
+          if (Constants.DYNAMO_DB) {
+            sendFutures[i] = sendMessage(builder.build(), Optional.of(new StoredMessageInfo(message.getGuid())));
+          } else {
+            sendFutures[i] = sendMessage(builder.build(), Optional.of(new StoredMessageInfo(message.getId(), message.isCached())));
+          }
         }
       }
 
@@ -358,10 +371,17 @@ public class WebSocketConnection implements MessageAvailabilityListener, Displac
   }
 
   private static class StoredMessageInfo {
-    private final UUID guid;
+    private UUID    guid;
+    private long    id;
+    private boolean cached;
 
     public StoredMessageInfo(UUID guid) {
       this.guid = guid;
+    }
+
+    public StoredMessageInfo(long id, boolean cached) {
+      this.id     = id;
+      this.cached = cached;
     }
 
     public UUID getGuid() {

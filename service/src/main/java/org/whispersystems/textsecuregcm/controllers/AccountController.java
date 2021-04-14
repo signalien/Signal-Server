@@ -708,7 +708,11 @@ public class AccountController {
     }
 
     directoryQueue.refreshRegisteredUser(account);
-    maybeExistingAccount.ifPresent(definitelyExistingAccount -> messagesManager.clear(definitelyExistingAccount.getUuid()));
+    if (Constants.DYNAMO_DB) {
+      maybeExistingAccount.ifPresent(definitelyExistingAccount -> messagesManager.clear(definitelyExistingAccount.getUuid()));
+    } else {
+      messagesManager.clear(number, maybeExistingAccount.map(Account::getUuid).orElse(null));
+    }
     pendingAccounts.remove(number);
 
     return account;

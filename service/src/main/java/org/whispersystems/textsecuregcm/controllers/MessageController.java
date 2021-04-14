@@ -370,11 +370,9 @@ public class MessageController {
       RedisOperation.unchecked(() -> apnFallbackManager.cancel(account, account.getAuthenticatedDevice().get()));
     }
 
-    final OutgoingMessageEntityList outgoingMessages = messagesManager.getMessagesForDevice(
-        account.getUuid(),
-        account.getAuthenticatedDevice().get().getId(),
-        userAgent,
-        false);
+    final OutgoingMessageEntityList outgoingMessages = Constants.DYNAMO_DB ?
+        messagesManager.getMessagesForDevice(account.getUuid(), account.getAuthenticatedDevice().get().getId(), userAgent, false) :
+        messagesManager.getMessagesForDevice(account.getNumber(), account.getUuid(), account.getAuthenticatedDevice().get().getId(), userAgent, false);
 
     outgoingMessageListSizeHistogram.update(outgoingMessages.getMessages().size());
 
@@ -415,10 +413,9 @@ public class MessageController {
   {
     try {
       WebSocketConnection.recordMessageDeliveryDuration(timestamp, account.getAuthenticatedDevice().get());
-      Optional<OutgoingMessageEntity> message = messagesManager.delete(
-          account.getUuid(),
-                                                                       account.getAuthenticatedDevice().get().getId(),
-                                                                       source, timestamp);
+      Optional<OutgoingMessageEntity> message = Constants.DYNAMO_DB ?
+          messagesManager.delete(account.getUuid(), account.getAuthenticatedDevice().get().getId(), source, timestamp) :
+          messagesManager.delete(account.getNumber(), account.getUuid(), account.getAuthenticatedDevice().get().getId(), source, timestamp);
 
       if (message.isPresent() && message.get().getType() != Envelope.Type.RECEIPT_VALUE) {
         receiptSender.sendReceipt(account,
@@ -435,10 +432,9 @@ public class MessageController {
   @Path("/uuid/{uuid}")
   public void removePendingMessage(@Auth Account account, @PathParam("uuid") UUID uuid) {
     try {
-      Optional<OutgoingMessageEntity> message = messagesManager.delete(
-          account.getUuid(),
-                                                                       account.getAuthenticatedDevice().get().getId(),
-                                                                       uuid);
+      Optional<OutgoingMessageEntity> message = Constants.DYNAMO_DB ?
+          messagesManager.delete(account.getUuid(), account.getAuthenticatedDevice().get().getId(), uuid) :
+          messagesManager.delete(account.getNumber(), account.getUuid(), account.getAuthenticatedDevice().get().getId(), uuid);
 
       if (message.isPresent()) {
         WebSocketConnection.recordMessageDeliveryDuration(message.get().getTimestamp(), account.getAuthenticatedDevice().get());

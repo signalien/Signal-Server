@@ -163,7 +163,11 @@ public class MessagePersister implements Managed {
                 do {
                     messages = messagesCache.getMessagesToPersist(accountUuid, deviceId, MESSAGE_BATCH_LIMIT);
 
-                    messagesManager.persistMessages(accountUuid, deviceId, messages);
+                    if (Constants.DYNAMO_DB) {
+                      messagesManager.persistMessages(accountUuid, deviceId, messages);
+                    } else {
+                      messagesManager.persistMessages(accountNumber, accountUuid, deviceId, messages);
+                    }
                     messageCount += messages.size();
 
                     persistMessageMeter.mark(messages.size());

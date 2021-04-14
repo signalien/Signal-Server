@@ -26,19 +26,23 @@ public class MessagesManager {
   private static final int RESULT_SET_CHUNK_SIZE = 100;
 
   private static final MetricRegistry metricRegistry       = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
+  private static final Meter          cacheHitByIdMeter    = metricRegistry.meter(name(MessagesManager.class, "cacheHitById"   ));
+  private static final Meter          cacheMissByIdMeter   = metricRegistry.meter(name(MessagesManager.class, "cacheMissById"  ));
   private static final Meter          cacheHitByNameMeter  = metricRegistry.meter(name(MessagesManager.class, "cacheHitByName" ));
   private static final Meter          cacheMissByNameMeter = metricRegistry.meter(name(MessagesManager.class, "cacheMissByName"));
   private static final Meter          cacheHitByGuidMeter  = metricRegistry.meter(name(MessagesManager.class, "cacheHitByGuid" ));
   private static final Meter          cacheMissByGuidMeter = metricRegistry.meter(name(MessagesManager.class, "cacheMissByGuid"));
 
+  private final Messages messages;
   private final MessagesDynamoDb messagesDynamoDb;
   private final MessagesCache messagesCache;
   private final PushLatencyManager pushLatencyManager;
 
-  public MessagesManager(
+  public MessagesManager(Messages messages,
       MessagesDynamoDb messagesDynamoDb,
       MessagesCache messagesCache,
       PushLatencyManager pushLatencyManager) {
+    this.messages = messages;
     this.messagesDynamoDb = messagesDynamoDb;
     this.messagesCache = messagesCache;
     this.pushLatencyManager = pushLatencyManager;
@@ -76,14 +80,45 @@ public class MessagesManager {
     return new OutgoingMessageEntityList(messageList, messageList.size() >= RESULT_SET_CHUNK_SIZE);
   }
 
+  @Deprecated
+  public OutgoingMessageEntityList getMessagesForDevice(String destination, UUID destinationUuid, long destinationDevice, final String userAgent, final boolean cachedMessagesOnly) {
+    RedisOperation.unchecked(() -> pushLatencyManager.recordQueueRead(destinationUuid, destinationDevice, userAgent));
+
+    List<OutgoingMessageEntity> messages = cachedMessagesOnly ? new ArrayList<>() : this.messages.load(destination, destinationDevice);
+
+    if (messages.size() < Messages.RESULT_SET_CHUNK_SIZE) {
+      messages.addAll(messagesCache.get(destinationUuid, destinationDevice, Messages.RESULT_SET_CHUNK_SIZE - messages.size()));
+    }
+
+    return new OutgoingMessageEntityList(messages, messages.size() >= Messages.RESULT_SET_CHUNK_SIZE);
+  }
+
   public void clear(UUID destinationUuid) {
     messagesCache.clear(destinationUuid);
     messagesDynamoDb.deleteAllMessagesForAccount(destinationUuid);
   }
 
+  @Deprecated
+  public void clear(String destination, UUID destinationUuid) {
+    if (destinationUuid != null) {
+      this.messagesCache.clear(destinationUuid);
+    }
+
+    this.messages.clear(destination);
+  }
+
   public void clear(UUID destinationUuid, long deviceId) {
     messagesCache.clear(destinationUuid, deviceId);
     messagesDynamoDb.deleteAllMessagesForDevice(destinationUuid, deviceId);
+  }
+
+  @Deprecated
+  public void clear(String destination, UUID destinationUuid, long deviceId) {
+    if (destinationUuid != null) {
+      this.messagesCache.clear(destinationUuid, deviceId);
+    }
+
+    this.messages.clear(destination, deviceId);
   }
 
   public Optional<OutgoingMessageEntity> delete(
@@ -92,6 +127,21 @@ public class MessagesManager {
 
     if (removed.isEmpty()) {
       removed = messagesDynamoDb.deleteMessageByDestinationAndSourceAndTimestamp(destinationUuid, destinationDeviceId, source, timestamp);
+      cacheMissByNameMeter.mark();
+    } else {
+      cacheHitByNameMeter.mark();
+    }
+
+    return removed;
+  }
+
+  @Deprecated
+  public Optional<OutgoingMessageEntity> delete(String destination, UUID destinationUuid, long destinationDevice, String source, long timestamp)
+  {
+    Optional<OutgoingMessageEntity> removed = messagesCache.remove(destinationUuid, destinationDevice, source, timestamp);
+
+    if (removed.isEmpty()) {
+      removed = this.messages.remove(destination, destinationDevice, source, timestamp);
       cacheMissByNameMeter.mark();
     } else {
       cacheHitByNameMeter.mark();
@@ -113,11 +163,42 @@ public class MessagesManager {
     return removed;
   }
 
+  @Deprecated
+  public Optional<OutgoingMessageEntity> delete(String destination, UUID destinationUuid, long deviceId, UUID guid) {
+    Optional<OutgoingMessageEntity> removed = messagesCache.remove(destinationUuid, deviceId, guid);
+
+    if (removed.isEmpty()) {
+      removed = this.messages.remove(destination, guid);
+      cacheMissByGuidMeter.mark();
+    } else {
+      cacheHitByGuidMeter.mark();
+    }
+
+    return removed;
+  }
+
+  @Deprecated
+  public void delete(String destination, UUID destinationUuid, long deviceId, long id, boolean cached) {
+    if (cached) {
+      messagesCache.remove(destinationUuid, deviceId, id);
+      cacheHitByIdMeter.mark();
+    } else {
+      this.messages.remove(destination, id);
+      cacheMissByIdMeter.mark();
+    }
+  }
+
   public void persistMessages(
       final UUID destinationUuid,
       final long destinationDeviceId,
       final List<Envelope> messages) {
     messagesDynamoDb.store(messages, destinationUuid, destinationDeviceId);
+    messagesCache.remove(destinationUuid, destinationDeviceId, messages.stream().map(message -> UUID.fromString(message.getServerGuid())).collect(Collectors.toList()));
+  }
+
+  @Deprecated
+  public void persistMessages(final String destination, final UUID destinationUuid, final long destinationDeviceId, final List<Envelope> messages) {
+    this.messages.store(messages, destination, destinationDeviceId);
     messagesCache.remove(destinationUuid, destinationDeviceId, messages.stream().map(message -> UUID.fromString(message.getServerGuid())).collect(Collectors.toList()));
   }
 

@@ -164,7 +164,11 @@ public class AccountsManager {
       directory.remove(account.getNumber());
       profilesManager.deleteAll(account.getUuid());
       keysDynamoDb.delete(account);
-      messagesManager.clear(account.getUuid());
+      if (Constants.DYNAMO_DB) {
+        messagesManager.clear(account.getUuid());
+      } else {
+        messagesManager.clear(account.getNumber(), account.getUuid());
+      }
 
       deleteStorageServiceDataFuture.join();
       deleteBackupServiceDataFuture.join();

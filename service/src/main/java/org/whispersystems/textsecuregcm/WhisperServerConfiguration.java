@@ -132,6 +132,11 @@ public class WhisperServerConfiguration extends Configuration {
   @Valid
   @NotNull
   @JsonProperty
+  private DatabaseConfiguration messageStore;
+
+  @Valid
+  @NotNull
+  @JsonProperty
   private DatabaseConfiguration abuseDatabase;
 
   @Valid
@@ -300,6 +305,10 @@ public class WhisperServerConfiguration extends Configuration {
 
   public DynamoDbConfiguration getKeysDynamoDbConfiguration() {
     return keysDynamoDb;
+  }
+
+  public DatabaseConfiguration getMessageStoreConfiguration() {
+    return messageStore;
   }
 
   public DatabaseConfiguration getAbuseDatabaseConfiguration() {
