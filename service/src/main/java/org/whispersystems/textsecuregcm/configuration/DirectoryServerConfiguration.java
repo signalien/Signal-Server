@@ -13,6 +13,9 @@ public class DirectoryServerConfiguration {
   @JsonProperty
   private String replicationName;
 
+  @JsonProperty
+  private boolean replicationPrimary;
+
   @NotEmpty
   @JsonProperty
   private String replicationUrl;
@@ -27,6 +30,10 @@ public class DirectoryServerConfiguration {
 
   public String getReplicationName() {
     return replicationName;
+  }
+
+  public boolean isReplicationPrimary() {
+    return replicationPrimary;
   }
 
   public String getReplicationUrl() {

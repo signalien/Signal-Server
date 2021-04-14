@@ -27,13 +27,16 @@ import org.slf4j.LoggerFactory;
 import org.whispersystems.textsecuregcm.WhisperServerConfiguration;
 import org.whispersystems.textsecuregcm.auth.ExternalServiceCredentialGenerator;
 import org.whispersystems.textsecuregcm.metrics.PushLatencyManager;
+import org.whispersystems.textsecuregcm.providers.RedisClientFactory;
 import org.whispersystems.textsecuregcm.redis.FaultTolerantRedisCluster;
+import org.whispersystems.textsecuregcm.redis.ReplicatedJedisPool;
 import org.whispersystems.textsecuregcm.securebackup.SecureBackupClient;
 import org.whispersystems.textsecuregcm.securestorage.SecureStorageClient;
 import org.whispersystems.textsecuregcm.sqs.DirectoryQueue;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.Accounts;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
+import org.whispersystems.textsecuregcm.storage.DirectoryManager;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.FaultTolerantDatabase;
 import org.whispersystems.textsecuregcm.storage.KeysDynamoDb;
@@ -120,6 +123,7 @@ public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfigura
       ReservedUsernames         reservedUsernames    = new ReservedUsernames(accountDatabase);
       KeysDynamoDb              keysDynamoDb         = new KeysDynamoDb(preKeysDynamoDb, configuration.getKeysDynamoDbConfiguration().getTableName());
       MessagesDynamoDb          messagesDynamoDb     = new MessagesDynamoDb(messageDynamoDb, configuration.getMessageDynamoDbConfiguration().getTableName(), configuration.getMessageDynamoDbConfiguration().getTimeToLive());
+      ReplicatedJedisPool       redisClient          = new RedisClientFactory("directory_cache_delete_command", configuration.getDirectoryConfiguration().getRedisConfiguration().getUrl(), configuration.getDirectoryConfiguration().getRedisConfiguration().getReplicaUrls(), configuration.getDirectoryConfiguration().getRedisConfiguration().getCircuitBreakerConfiguration()).getRedisClientPool();
       FaultTolerantRedisCluster messageInsertCacheCluster = new FaultTolerantRedisCluster("message_insert_cluster", configuration.getMessageCacheConfiguration().getRedisClusterConfiguration(), redisClusterClientResources);
       FaultTolerantRedisCluster messageReadDeleteCluster = new FaultTolerantRedisCluster("message_read_delete_cluster", configuration.getMessageCacheConfiguration().getRedisClusterConfiguration(), redisClusterClientResources);
       FaultTolerantRedisCluster metricsCluster       = new FaultTolerantRedisCluster("metrics_cluster", configuration.getMetricsClusterConfiguration(), redisClusterClientResources);
@@ -128,10 +132,11 @@ public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfigura
       MessagesCache             messagesCache        = new MessagesCache(messageInsertCacheCluster, messageReadDeleteCluster, keyspaceNotificationDispatchExecutor);
       PushLatencyManager        pushLatencyManager   = new PushLatencyManager(metricsCluster);
       DirectoryQueue            directoryQueue       = new DirectoryQueue  (configuration.getDirectoryConfiguration().getSqsConfiguration());
+      DirectoryManager          directory            = new DirectoryManager(redisClient);
       UsernamesManager          usernamesManager     = new UsernamesManager(usernames, reservedUsernames, cacheCluster);
       ProfilesManager           profilesManager      = new ProfilesManager(profiles, cacheCluster);
       MessagesManager           messagesManager      = new MessagesManager(messagesDynamoDb, messagesCache, pushLatencyManager);
-      AccountsManager           accountsManager      = new AccountsManager(accounts, cacheCluster, directoryQueue, keysDynamoDb, messagesManager, usernamesManager, profilesManager, secureStorageClient, secureBackupClient);
+      AccountsManager           accountsManager      = new AccountsManager(accounts, directory, cacheCluster, directoryQueue, keysDynamoDb, messagesManager, usernamesManager, profilesManager, secureStorageClient, secureBackupClient);
 
       for (String user: users) {
         Optional<Account> account = accountsManager.get(user);

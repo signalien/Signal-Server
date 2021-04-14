@@ -23,6 +23,7 @@ import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.textsecuregcm.auth.AmbiguousIdentifier;
+import org.whispersystems.textsecuregcm.entities.ClientContact;
 import org.whispersystems.textsecuregcm.redis.FaultTolerantRedisCluster;
 import org.whispersystems.textsecuregcm.securebackup.SecureBackupClient;
 import org.whispersystems.textsecuregcm.securestorage.SecureStorageClient;
@@ -55,6 +56,7 @@ public class AccountsManager {
 
   private final Accounts                  accounts;
   private final FaultTolerantRedisCluster cacheCluster;
+  private final DirectoryManager          directory;
   private final DirectoryQueue            directoryQueue;
   private final KeysDynamoDb              keysDynamoDb;
   private final MessagesManager           messagesManager;
@@ -76,11 +78,12 @@ public class AccountsManager {
     }
   }
 
-  public AccountsManager(Accounts accounts, FaultTolerantRedisCluster cacheCluster, final DirectoryQueue directoryQueue,
+  public AccountsManager(Accounts accounts, DirectoryManager directory, FaultTolerantRedisCluster cacheCluster, final DirectoryQueue directoryQueue,
       final KeysDynamoDb keysDynamoDb, final MessagesManager messagesManager, final UsernamesManager usernamesManager,
       final ProfilesManager profilesManager, final SecureStorageClient secureStorageClient,
       final SecureBackupClient secureBackupClient) {
     this.accounts            = accounts;
+    this.directory           = directory;
     this.cacheCluster        = cacheCluster;
     this.directoryQueue      = directoryQueue;
     this.keysDynamoDb        = keysDynamoDb;
@@ -96,6 +99,7 @@ public class AccountsManager {
     try (Timer.Context ignored = createTimer.time()) {
       boolean freshUser = databaseCreate(account);
       redisSet(account);
+      updateDirectory(account);
 
       return freshUser;
     }
@@ -105,6 +109,7 @@ public class AccountsManager {
     try (Timer.Context ignored = updateTimer.time()) {
       redisSet(account);
       databaseUpdate(account);
+      updateDirectory(account);
     }
   }
 
@@ -156,6 +161,7 @@ public class AccountsManager {
 
       usernamesManager.delete(account.getUuid());
       directoryQueue.deleteAccount(account);
+      directory.remove(account.getNumber());
       profilesManager.deleteAll(account.getUuid());
       keysDynamoDb.delete(account);
       messagesManager.clear(account.getUuid());
@@ -179,6 +185,16 @@ public class AccountsManager {
                     COUNTRY_CODE_TAG_NAME,    Util.getCountryCode(account.getNumber()),
                     DELETION_REASON_TAG_NAME, deletionReason.tagValue)
            .increment();
+  }
+
+  private void updateDirectory(Account account) {
+    if (account.isEnabled()) {
+      byte[]        token         = Util.getContactToken(account.getNumber());
+      ClientContact clientContact = new ClientContact(token, null, true, true);
+      directory.add(clientContact);
+    } else {
+      directory.remove(account.getNumber());
+    }
   }
 
   private String getAccountMapKey(String number) {

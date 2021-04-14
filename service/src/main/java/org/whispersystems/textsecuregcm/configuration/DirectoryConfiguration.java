@@ -15,6 +15,11 @@ public class DirectoryConfiguration {
   @JsonProperty
   @NotNull
   @Valid
+  private RedisConfiguration redis;
+
+  @JsonProperty
+  @NotNull
+  @Valid
   private SqsConfiguration sqs;
     
   @JsonProperty
@@ -26,6 +31,10 @@ public class DirectoryConfiguration {
   @NotNull
   @Valid
   private List<DirectoryServerConfiguration> server;
+
+  public RedisConfiguration getRedisConfiguration() {
+    return redis;
+  }
 
   public SqsConfiguration getSqsConfiguration() {
     return sqs;

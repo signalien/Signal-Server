@@ -24,6 +24,8 @@ public class RateLimiters {
   private final RateLimiter pinLimiter;
 
   private final RateLimiter attachmentLimiter;
+  private final RateLimiter contactsLimiter;
+  private final RateLimiter contactsIpLimiter;
   private final RateLimiter preKeysLimiter;
   private final RateLimiter messagesLimiter;
 
@@ -82,6 +84,14 @@ public class RateLimiters {
     this.attachmentLimiter = new RateLimiter(cacheCluster, "attachmentCreate",
                                              config.getAttachments().getBucketSize(),
                                              config.getAttachments().getLeakRatePerMinute());
+
+    this.contactsLimiter = new RateLimiter(cacheCluster, "contactsQuery",
+                                           config.getContactQueries().getBucketSize(),
+                                           config.getContactQueries().getLeakRatePerMinute());
+
+    this.contactsIpLimiter = new RateLimiter(cacheCluster, "contactsIpQuery",
+                                             config.getContactIpQueries().getBucketSize(),
+                                             config.getContactIpQueries().getLeakRatePerMinute());
 
     this.preKeysLimiter = new RateLimiter(cacheCluster, "prekeys",
                                           config.getPreKeys().getBucketSize(),
@@ -161,6 +171,14 @@ public class RateLimiters {
 
   public RateLimiter getPreKeysLimiter() {
     return preKeysLimiter;
+  }
+
+  public RateLimiter getContactsLimiter() {
+    return contactsLimiter;
+  }
+
+  public RateLimiter getContactsIpLimiter() {
+    return contactsIpLimiter;
   }
 
   public RateLimiter getAttachmentLimiter() {
