@@ -12,6 +12,7 @@ import org.whispersystems.textsecuregcm.entities.DirectoryReconciliationRequest;
 import org.whispersystems.textsecuregcm.entities.DirectoryReconciliationResponse;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountDatabaseCrawlerRestartException;
+import org.whispersystems.textsecuregcm.storage.DirectoryManager;
 import org.whispersystems.textsecuregcm.storage.DirectoryReconciler;
 import org.whispersystems.textsecuregcm.storage.DirectoryReconciliationClient;
 
@@ -34,8 +35,9 @@ public class DirectoryReconcilerTest {
   private final Account                       activeAccount         = mock(Account.class);
   private final Account                       inactiveAccount       = mock(Account.class);
   private final Account                       undiscoverableAccount = mock(Account.class);
+  private final DirectoryManager              directoryManager      = mock(DirectoryManager.class);
   private final DirectoryReconciliationClient reconciliationClient  = mock(DirectoryReconciliationClient.class);
-  private final DirectoryReconciler           directoryReconciler   = new DirectoryReconciler("test", reconciliationClient);
+  private final DirectoryReconciler           directoryReconciler   = new DirectoryReconciler("test", true, reconciliationClient, directoryManager);
 
   private final DirectoryReconciliationResponse successResponse = new DirectoryReconciliationResponse(DirectoryReconciliationResponse.Status.OK);
 

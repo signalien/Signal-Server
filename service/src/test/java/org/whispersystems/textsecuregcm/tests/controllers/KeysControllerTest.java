@@ -21,13 +21,13 @@ import org.whispersystems.textsecuregcm.entities.PreKeyCount;
 import org.whispersystems.textsecuregcm.entities.PreKeyResponse;
 import org.whispersystems.textsecuregcm.entities.PreKeyState;
 import org.whispersystems.textsecuregcm.entities.SignedPreKey;
-import org.whispersystems.textsecuregcm.experiment.ExperimentEnrollmentManager;
 import org.whispersystems.textsecuregcm.limits.RateLimiter;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
 import org.whispersystems.textsecuregcm.sqs.DirectoryQueue;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
+import org.whispersystems.textsecuregcm.storage.Keys;
 import org.whispersystems.textsecuregcm.storage.KeysDynamoDb;
 import org.whispersystems.textsecuregcm.tests.util.AuthHelper;
 
@@ -70,6 +70,7 @@ public class KeysControllerTest {
   private final SignedPreKey SAMPLE_SIGNED_KEY3      = new SignedPreKey( 3333, "barfoo", "sig33"    );
   private final SignedPreKey VALID_DEVICE_SIGNED_KEY = new SignedPreKey(89898, "zoofarb", "sigvalid");
 
+  private final Keys                        keys                        = mock(Keys.class                       );
   private final KeysDynamoDb                keysDynamoDb                = mock(KeysDynamoDb.class               );
   private final AccountsManager             accounts                    = mock(AccountsManager.class            );
   private final DirectoryQueue              directoryQueue              = mock(DirectoryQueue.class             );
@@ -83,7 +84,7 @@ public class KeysControllerTest {
                                                             .addProvider(AuthHelper.getAuthFilter())
                                                             .addProvider(new PolymorphicAuthValueFactoryProvider.Binder<>(ImmutableSet.of(Account.class, DisabledPermittedAccount.class)))
                                                             .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
-                                                            .addResource(new KeysController(rateLimiters, keysDynamoDb, accounts, directoryQueue))
+                                                            .addResource(new KeysController(rateLimiters, keys, keysDynamoDb, accounts, directoryQueue))
                                                             .build();
 
   @Before

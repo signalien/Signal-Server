@@ -16,6 +16,9 @@ import com.amazonaws.services.dynamodbv2.document.ScanOutcome;
 import com.amazonaws.services.dynamodbv2.document.Table;
 import com.amazonaws.services.dynamodbv2.document.spec.ScanSpec;
 import com.google.protobuf.ByteString;
+import com.opentable.db.postgres.embedded.LiquibasePreparer;
+import com.opentable.db.postgres.junit.EmbeddedPostgresRules;
+import com.opentable.db.postgres.junit.PreparedDbRule;
 import io.lettuce.core.cluster.SlotHash;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -29,10 +32,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.jdbi.v3.core.Jdbi;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.whispersystems.textsecuregcm.configuration.CircuitBreakerConfiguration;
 import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
 import org.whispersystems.textsecuregcm.entities.MessageProtos;
 import org.whispersystems.textsecuregcm.metrics.PushLatencyManager;
@@ -40,6 +45,9 @@ import org.whispersystems.textsecuregcm.redis.AbstractRedisClusterTest;
 import org.whispersystems.textsecuregcm.tests.util.MessagesDynamoDbRule;
 
 public class MessagePersisterIntegrationTest extends AbstractRedisClusterTest {
+
+    @Rule
+    public PreparedDbRule db = EmbeddedPostgresRules.preparedDatabase(LiquibasePreparer.forClasspathLocation("messagedb.xml"));
 
     @Rule
     public MessagesDynamoDbRule messagesDynamoDbRule = new MessagesDynamoDbRule();
@@ -62,13 +70,14 @@ public class MessagePersisterIntegrationTest extends AbstractRedisClusterTest {
             connection.sync().upstream().commands().configSet("notify-keyspace-events", "K$glz");
         });
 
+        final Messages messages = new Messages(new FaultTolerantDatabase("messages-test", Jdbi.create(db.getTestDatabase()), new CircuitBreakerConfiguration()));
         final MessagesDynamoDb messagesDynamoDb = new MessagesDynamoDb(messagesDynamoDbRule.getDynamoDB(), MessagesDynamoDbRule.TABLE_NAME, Duration.ofDays(7));
         final AccountsManager accountsManager = mock(AccountsManager.class);
         final DynamicConfigurationManager dynamicConfigurationManager = mock(DynamicConfigurationManager.class);
 
         notificationExecutorService = Executors.newSingleThreadExecutor();
         messagesCache               = new MessagesCache(getRedisCluster(), getRedisCluster(), notificationExecutorService);
-        messagesManager             = new MessagesManager(messagesDynamoDb, messagesCache, mock(PushLatencyManager.class));
+        messagesManager             = new MessagesManager(messages, messagesDynamoDb, messagesCache, mock(PushLatencyManager.class));
         messagePersister            = new MessagePersister(messagesCache, messagesManager, accountsManager, dynamicConfigurationManager, PERSIST_DELAY);
 
         account = mock(Account.class);

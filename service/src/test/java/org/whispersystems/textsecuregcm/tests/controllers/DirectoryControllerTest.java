@@ -16,7 +16,9 @@ import org.whispersystems.textsecuregcm.auth.DisabledPermittedAccount;
 import org.whispersystems.textsecuregcm.auth.ExternalServiceCredentialGenerator;
 import org.whispersystems.textsecuregcm.auth.ExternalServiceCredentials;
 import org.whispersystems.textsecuregcm.controllers.DirectoryController;
+import org.whispersystems.textsecuregcm.limits.RateLimiters;
 import org.whispersystems.textsecuregcm.storage.Account;
+import org.whispersystems.textsecuregcm.storage.DirectoryManager;
 import org.whispersystems.textsecuregcm.tests.util.AuthHelper;
 
 import javax.ws.rs.client.Entity;
@@ -32,6 +34,8 @@ import static org.mockito.Mockito.when;
 
 public class DirectoryControllerTest {
 
+  private final RateLimiters                       rateLimiters                  = mock(RateLimiters.class                      );
+  private final DirectoryManager                   directoryManager              = mock(DirectoryManager.class                  );
   private final ExternalServiceCredentialGenerator directoryCredentialsGenerator = mock(ExternalServiceCredentialGenerator.class);
   private final ExternalServiceCredentials         validCredentials              = new ExternalServiceCredentials("username", "password");
 
@@ -40,7 +44,9 @@ public class DirectoryControllerTest {
                                                             .addProvider(AuthHelper.getAuthFilter())
                                                             .addProvider(new PolymorphicAuthValueFactoryProvider.Binder<>(ImmutableSet.of(Account.class, DisabledPermittedAccount.class)))
                                                             .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
-                                                            .addResource(new DirectoryController(directoryCredentialsGenerator))
+                                                            .addResource(new DirectoryController(rateLimiters,
+                                                                                                 directoryManager,
+                                                                                                 directoryCredentialsGenerator))
                                                             .build();
 
   @Before

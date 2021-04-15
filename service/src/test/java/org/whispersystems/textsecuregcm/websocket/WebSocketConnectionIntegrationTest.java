@@ -31,19 +31,26 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import com.opentable.db.postgres.embedded.LiquibasePreparer;
+import com.opentable.db.postgres.junit.EmbeddedPostgresRules;
+import com.opentable.db.postgres.junit.PreparedDbRule;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.jdbi.v3.core.Jdbi;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.stubbing.Answer;
+import org.whispersystems.textsecuregcm.configuration.CircuitBreakerConfiguration;
 import org.whispersystems.textsecuregcm.entities.MessageProtos;
 import org.whispersystems.textsecuregcm.metrics.PushLatencyManager;
 import org.whispersystems.textsecuregcm.push.ReceiptSender;
 import org.whispersystems.textsecuregcm.redis.AbstractRedisClusterTest;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.Device;
+import org.whispersystems.textsecuregcm.storage.FaultTolerantDatabase;
+import org.whispersystems.textsecuregcm.storage.Messages;
 import org.whispersystems.textsecuregcm.storage.MessagesCache;
 import org.whispersystems.textsecuregcm.storage.MessagesDynamoDb;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
@@ -54,9 +61,13 @@ import org.whispersystems.websocket.messages.WebSocketResponseMessage;
 public class WebSocketConnectionIntegrationTest extends AbstractRedisClusterTest {
 
     @Rule
+    public PreparedDbRule db = EmbeddedPostgresRules.preparedDatabase(LiquibasePreparer.forClasspathLocation("messagedb.xml"));
+
+    @Rule
     public MessagesDynamoDbRule messagesDynamoDbRule = new MessagesDynamoDbRule();
 
     private ExecutorService executorService;
+    private Messages messages;
     private MessagesDynamoDb messagesDynamoDb;
     private MessagesCache messagesCache;
     private Account account;
@@ -73,6 +84,7 @@ public class WebSocketConnectionIntegrationTest extends AbstractRedisClusterTest
         super.setUp();
 
         executorService = Executors.newSingleThreadExecutor();
+        messages = new Messages(new FaultTolerantDatabase("messages-test", Jdbi.create(db.getTestDatabase()), new CircuitBreakerConfiguration()));
         messagesCache = new MessagesCache(getRedisCluster(), getRedisCluster(), executorService);
         messagesDynamoDb = new MessagesDynamoDb(messagesDynamoDbRule.getDynamoDB(), MessagesDynamoDbRule.TABLE_NAME, Duration.ofDays(7));
         account = mock(Account.class);
@@ -86,7 +98,7 @@ public class WebSocketConnectionIntegrationTest extends AbstractRedisClusterTest
 
         webSocketConnection = new WebSocketConnection(
                 mock(ReceiptSender.class),
-                new MessagesManager(messagesDynamoDb, messagesCache, mock(PushLatencyManager.class)),
+                new MessagesManager(messages, messagesDynamoDb, messagesCache, mock(PushLatencyManager.class)),
                 account,
                 device,
                 webSocketClient,
