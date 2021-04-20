@@ -12,12 +12,7 @@ import org.whispersystems.textsecuregcm.redis.RedisOperation;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
-import org.whispersystems.textsecuregcm.storage.PubSubManager;
-import org.whispersystems.textsecuregcm.storage.PubSubProtos.PubSubMessage;
-import org.whispersystems.textsecuregcm.storage.PubSubProtos.PubSubMessage.Type;
-import org.whispersystems.textsecuregcm.util.Constants;
 import org.whispersystems.textsecuregcm.util.Util;
-import org.whispersystems.textsecuregcm.websocket.WebsocketAddress;
 
 import java.util.List;
 import java.util.Optional;
@@ -46,7 +41,6 @@ public class MessageSender implements Managed {
   private final GCMSender                  gcmSender;
   private final APNSender                  apnSender;
   private final PushLatencyManager         pushLatencyManager;
-  private final PubSubManager              pubSubManager;
 
   private static final String SEND_COUNTER_NAME      = name(MessageSender.class, "sendMessage");
   private static final String CHANNEL_TAG_NAME       = "channel";
@@ -58,8 +52,7 @@ public class MessageSender implements Managed {
                        MessagesManager       messagesManager,
                        GCMSender             gcmSender,
                        APNSender             apnSender,
-                       PushLatencyManager    pushLatencyManager,
-                       PubSubManager         pubSubManager)
+                       PushLatencyManager    pushLatencyManager)
   {
     this.apnFallbackManager    = apnFallbackManager;
     this.clientPresenceManager = clientPresenceManager;
@@ -67,7 +60,6 @@ public class MessageSender implements Managed {
     this.gcmSender             = gcmSender;
     this.apnSender             = apnSender;
     this.pushLatencyManager    = pushLatencyManager;
-    this.pubSubManager         = pubSubManager;
   }
 
   public void sendMessage(final Account account, final Device device, final Envelope message, boolean online)
@@ -96,21 +88,6 @@ public class MessageSender implements Managed {
 
       if (clientPresent) {
         messagesManager.insertEphemeral(account.getUuid(), device.getId(), message);
-      }
-    } else if (Constants.PUB_SUB) {
-      WebsocketAddress address = new WebsocketAddress(account.getNumber(), device.getId());
-      PubSubMessage pubSubMessage = PubSubMessage.newBuilder()
-                                                 .setType(Type.DELIVER)
-                                                 .setContent(message.toByteString())
-                                                 .build();
-
-      pubSubManager.publish(address, pubSubMessage);
-
-      clientPresent = clientPresenceManager.isPresent(account.getUuid(), device.getId());
-
-      if (!clientPresent) {
-        messagesManager.insert(account.getUuid(), device.getId(), message);
-        pubSubManager.publish(address, PubSubMessage.newBuilder().setType(Type.QUERY_DB).build());
       }
     } else {
       messagesManager.insert(account.getUuid(), device.getId(), message);

@@ -13,5 +13,4 @@ public class Constants {
   public static final int MAXIMUM_STICKER_MANIFEST_SIZE_BYTES = (int) DataSize.kibibytes(10).toBytes();
 
   public static final boolean DYNAMO_DB = false;
-  public static final boolean PUB_SUB   = true;
 }
