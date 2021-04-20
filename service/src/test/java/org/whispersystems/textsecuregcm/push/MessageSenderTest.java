@@ -14,6 +14,7 @@ import org.whispersystems.textsecuregcm.metrics.PushLatencyManager;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
+import org.whispersystems.textsecuregcm.storage.PubSubManager;
 
 import java.util.UUID;
 
@@ -56,7 +57,8 @@ public class MessageSenderTest {
                                                   messagesManager,
                                                   gcmSender,
                                                   apnSender,
-                                                  mock(PushLatencyManager.class));
+                                                  mock(PushLatencyManager.class),
+                                                  mock(PubSubManager.class));
 
         when(account.getUuid()).thenReturn(ACCOUNT_UUID);
         when(device.getId()).thenReturn(DEVICE_ID);

@@ -14,6 +14,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tag;
 import java.util.ArrayList;
@@ -36,6 +37,7 @@ import javax.ws.rs.WebApplicationException;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.whispersystems.dispatch.DispatchChannel;
 import org.whispersystems.textsecuregcm.controllers.MessageController;
 import org.whispersystems.textsecuregcm.controllers.NoSuchUserException;
 import org.whispersystems.textsecuregcm.entities.OutgoingMessageEntity;
@@ -47,6 +49,7 @@ import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.MessageAvailabilityListener;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
+import org.whispersystems.textsecuregcm.storage.PubSubProtos.PubSubMessage;
 import org.whispersystems.textsecuregcm.util.Constants;
 import org.whispersystems.textsecuregcm.util.TimestampHeaderUtil;
 import org.whispersystems.textsecuregcm.util.Util;
@@ -57,7 +60,7 @@ import org.whispersystems.websocket.WebSocketClient;
 import org.whispersystems.websocket.messages.WebSocketResponseMessage;
 
 @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
-public class WebSocketConnection implements MessageAvailabilityListener, DisplacedPresenceListener {
+public class WebSocketConnection implements DispatchChannel, MessageAvailabilityListener, DisplacedPresenceListener {
 
   private static final MetricRegistry metricRegistry                 = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
   private static final Histogram      messageTime                    = metricRegistry.histogram(name(MessageController.class, "message_delivery_duration"));
@@ -139,6 +142,37 @@ public class WebSocketConnection implements MessageAvailabilityListener, Displac
     }
 
     this.isDesktopClient = maybePlatform.map(platform -> platform == ClientPlatform.DESKTOP).orElse(false);
+  }
+
+  @Override
+  public void onDispatchMessage(String channel, byte[] message) {
+    try {
+      PubSubMessage pubSubMessage = PubSubMessage.parseFrom(message);
+
+      switch (pubSubMessage.getType().getNumber()) {
+        case PubSubMessage.Type.QUERY_DB_VALUE:
+          storedMessageState.set(StoredMessageState.PERSISTED_NEW_MESSAGES_AVAILABLE);
+          processStoredMessages();
+          break;
+        case PubSubMessage.Type.DELIVER_VALUE:
+          sendMessage(Envelope.parseFrom(pubSubMessage.getContent()), Optional.empty());
+          break;
+        default:
+          logger.warn("Unknown pubsub message: " + pubSubMessage.getType().getNumber());
+      }
+    } catch (InvalidProtocolBufferException e) {
+      logger.warn("Protobuf parse error", e);
+    }
+  }
+
+  @Override
+  public void onDispatchSubscribed(String channel) {
+    start();
+  }
+
+  @Override
+  public void onDispatchUnsubscribed(String channel) {
+    stop();
   }
 
   public void start() {
