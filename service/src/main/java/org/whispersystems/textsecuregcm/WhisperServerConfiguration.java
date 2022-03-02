@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.dropwizard.Configuration;
 import io.dropwizard.client.JerseyClientConfiguration;
 import org.whispersystems.textsecuregcm.configuration.AccountDatabaseCrawlerConfiguration;
+import org.whispersystems.textsecuregcm.configuration.AccountsDynamoDbConfiguration;
 import org.whispersystems.textsecuregcm.configuration.ApnConfiguration;
 import org.whispersystems.textsecuregcm.configuration.AppConfigConfiguration;
 import org.whispersystems.textsecuregcm.configuration.AwsAttachmentsConfiguration;
@@ -128,6 +129,11 @@ public class WhisperServerConfiguration extends Configuration {
   @NotNull
   @JsonProperty
   private DynamoDbConfiguration keysDynamoDb;
+
+  @Valid
+  @NotNull
+  @JsonProperty
+  private AccountsDynamoDbConfiguration accountsDynamoDb;
 
   @Valid
   @NotNull
@@ -305,6 +311,10 @@ public class WhisperServerConfiguration extends Configuration {
 
   public DynamoDbConfiguration getKeysDynamoDbConfiguration() {
     return keysDynamoDb;
+  }
+
+  public AccountsDynamoDbConfiguration getAccountsDynamoDbConfiguration() {
+    return accountsDynamoDb;
   }
 
   public DatabaseConfiguration getMessageStoreConfiguration() {

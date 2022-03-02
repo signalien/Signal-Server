@@ -14,16 +14,21 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.lettuce.core.RedisException;
 import io.lettuce.core.cluster.api.sync.RedisAdvancedClusterCommands;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Metrics;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.textsecuregcm.auth.AmbiguousIdentifier;
 import org.whispersystems.textsecuregcm.entities.ClientContact;
+import org.whispersystems.textsecuregcm.experiment.ExperimentEnrollmentManager;
 import org.whispersystems.textsecuregcm.redis.FaultTolerantRedisCluster;
 import org.whispersystems.textsecuregcm.securebackup.SecureBackupClient;
 import org.whispersystems.textsecuregcm.securestorage.SecureStorageClient;
@@ -51,10 +56,14 @@ public class AccountsManager {
   private static final String COUNTRY_CODE_TAG_NAME     = "country";
   private static final String DELETION_REASON_TAG_NAME  = "reason";
 
+  private static final String DYNAMO_MIGRATION_ERROR_COUNTER = name(AccountsManager.class, "migration", "error");
+  private static final Counter DYNAMO_MIGRATION_COMPARISON_COUNTER = Metrics.counter(name(AccountsManager.class, "migration", "comparisons"));
+  private static final Counter DYNAMO_MIGRATION_MISMATCH_COUNTER = Metrics.counter(name(AccountsManager.class, "migration", "mismatches"));
 
   private final Logger logger = LoggerFactory.getLogger(AccountsManager.class);
 
   private final Accounts                  accounts;
+  private final AccountsDynamoDb          accountsDynamoDb;
   private final FaultTolerantRedisCluster cacheCluster;
   private final DirectoryManager          directory;
   private final DirectoryQueue            directoryQueue;
@@ -66,6 +75,9 @@ public class AccountsManager {
   private final SecureStorageClient       secureStorageClient;
   private final SecureBackupClient        secureBackupClient;
   private final ObjectMapper              mapper;
+
+  private final DynamicConfigurationManager dynamicConfigurationManager;
+  private final ExperimentEnrollmentManager experimentEnrollmentManager;
 
   public enum DeletionReason {
     ADMIN_DELETED("admin"),
@@ -79,11 +91,13 @@ public class AccountsManager {
     }
   }
 
-  public AccountsManager(Accounts accounts, DirectoryManager directory, FaultTolerantRedisCluster cacheCluster, final DirectoryQueue directoryQueue,
+  public AccountsManager(Accounts accounts, AccountsDynamoDb accountsDynamoDb, DirectoryManager directory, FaultTolerantRedisCluster cacheCluster, final DirectoryQueue directoryQueue,
       final Keys keys, final KeysDynamoDb keysDynamoDb, final MessagesManager messagesManager, final UsernamesManager usernamesManager,
       final ProfilesManager profilesManager, final SecureStorageClient secureStorageClient,
-      final SecureBackupClient secureBackupClient) {
+      final SecureBackupClient secureBackupClient,
+      final ExperimentEnrollmentManager experimentEnrollmentManager, final DynamicConfigurationManager dynamicConfigurationManager) {
     this.accounts            = accounts;
+    this.accountsDynamoDb    = accountsDynamoDb;
     this.directory           = directory;
     this.cacheCluster        = cacheCluster;
     this.directoryQueue      = directoryQueue;
@@ -95,6 +109,9 @@ public class AccountsManager {
     this.secureStorageClient = secureStorageClient;
     this.secureBackupClient  = secureBackupClient;
     this.mapper              = SystemMapper.getMapper();
+
+    this.dynamicConfigurationManager = dynamicConfigurationManager;
+    this.experimentEnrollmentManager = experimentEnrollmentManager;
   }
 
   public boolean create(Account account) {
@@ -103,15 +120,27 @@ public class AccountsManager {
       redisSet(account);
       updateDirectory(account);
 
+      if (dynamoWriteEnabled()) {
+        runSafelyAndRecordMetrics(() -> dynamoCreate(account), Optional.of(account.getUuid()), freshUser,
+            Boolean::compareTo, "create");
+      }
       return freshUser;
     }
   }
 
   public void update(Account account) {
     try (Timer.Context ignored = updateTimer.time()) {
+      account.setDynamoDbMigrationVersion(account.getDynamoDbMigrationVersion() + 1);
       redisSet(account);
       databaseUpdate(account);
       updateDirectory(account);
+
+      if (dynamoWriteEnabled()) {
+        runSafelyAndRecordMetrics(() -> {
+          dynamoUpdate(account);
+          return true;
+        }, Optional.of(account.getUuid()), true, Boolean::compareTo, "update");
+      }
     }
   }
 
@@ -128,6 +157,11 @@ public class AccountsManager {
       if (!account.isPresent()) {
         account = databaseGet(number);
         account.ifPresent(value -> redisSet(value));
+
+        if (dynamoReadEnabled()) {
+          runSafelyAndRecordMetrics(() -> dynamoGet(number), Optional.empty(), account, this::compareAccounts,
+              "getByNumber");
+        }
       }
 
       return account;
@@ -141,6 +175,11 @@ public class AccountsManager {
       if (!account.isPresent()) {
         account = databaseGet(uuid);
         account.ifPresent(value -> redisSet(value));
+
+        if (dynamoReadEnabled()) {
+          runSafelyAndRecordMetrics(() -> dynamoGet(uuid), Optional.of(uuid), account, this::compareAccounts,
+              "getByUuid");
+        }
       }
 
       return account;
@@ -178,6 +217,16 @@ public class AccountsManager {
 
       redisDelete(account);
       databaseDelete(account);
+
+      if (dynamoDeleteEnabled()) {
+        try {
+          dynamoDelete(account);
+        } catch (final Exception e) {
+          logger.error("Could not delete account {} from dynamo", account.getUuid().toString());
+          Metrics.counter(DYNAMO_MIGRATION_ERROR_COUNTER, "action", "delete");
+        }
+      }
+
     } catch (final Exception e) {
       logger.warn("Failed to delete account", e);
 
@@ -287,5 +336,108 @@ public class AccountsManager {
 
   private void databaseDelete(final Account account) {
     accounts.delete(account.getUuid());
+  }
+
+  private Optional<Account> dynamoGet(String number) {
+    return accountsDynamoDb.get(number);
+  }
+
+  private Optional<Account> dynamoGet(UUID uuid) {
+    return accountsDynamoDb.get(uuid);
+  }
+
+  private boolean dynamoCreate(Account account) {
+    return accountsDynamoDb.create(account);
+  }
+
+  private void dynamoUpdate(Account account) {
+    accountsDynamoDb.update(account);
+  }
+
+  private void dynamoDelete(final Account account) {
+    accountsDynamoDb.delete(account.getUuid());
+  }
+
+  private boolean dynamoDeleteEnabled() {
+    return dynamicConfigurationManager.getConfiguration().getAccountsDynamoDbMigrationConfiguration().isDeleteEnabled();
+  }
+
+  private boolean dynamoReadEnabled() {
+    return dynamicConfigurationManager.getConfiguration().getAccountsDynamoDbMigrationConfiguration().isReadEnabled();
+  }
+
+  private boolean dynamoWriteEnabled() {
+    return dynamoDeleteEnabled()
+        && dynamicConfigurationManager.getConfiguration().getAccountsDynamoDbMigrationConfiguration().isWriteEnabled();
+  }
+
+  @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
+  public int compareAccounts(final Optional<Account> maybeDatabaseAccount, final Optional<Account> maybeDynamoAccount) {
+
+    if (maybeDatabaseAccount.isEmpty() && maybeDynamoAccount.isEmpty()) {
+      return 0;
+    }
+
+    if (maybeDatabaseAccount.isEmpty() || maybeDynamoAccount.isEmpty()) {
+      return 1;
+    }
+
+    final Account databaseAccount = maybeDatabaseAccount.get();
+    final Account dynamoAccount = maybeDynamoAccount.get();
+
+    final int uuidCompare = databaseAccount.getUuid().compareTo(dynamoAccount.getUuid());
+
+    if (uuidCompare != 0) {
+      return uuidCompare;
+    }
+
+    final int numberCompare = databaseAccount.getNumber().compareTo(dynamoAccount.getNumber());
+
+    if (numberCompare != 0) {
+      return numberCompare;
+    }
+
+    try {
+      final byte[] databaseSerialized = mapper.writeValueAsBytes(databaseAccount);
+      final byte[] dynamoSerialized = mapper.writeValueAsBytes(dynamoAccount);
+
+      return Arrays.compare(databaseSerialized, dynamoSerialized);
+
+    } catch (JsonProcessingException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
+  private <T> void runSafelyAndRecordMetrics(Callable<T> callable, Optional<UUID> maybeUuid, final T databaseResult, final Comparator<T> comparator, final String action) {
+
+    if (maybeUuid.isPresent()) {
+      // the only time we don’t have a UUID is in getByNumber, which is sufficiently low volume to not be a concern, and
+      // it will also be gated by the global readEnabled configuration
+      final boolean enrolled = experimentEnrollmentManager.isEnrolled(maybeUuid.get(), "accountsDynamoDbMigration");
+
+      if (!enrolled) {
+        return;
+      }
+    }
+
+    try {
+
+      final T dynamoResult = callable.call();
+      compare(databaseResult, dynamoResult, comparator);
+
+    } catch (final Exception e) {
+      logger.error("Error running " + action + " ih Dynamo", e);
+
+      Metrics.counter(DYNAMO_MIGRATION_ERROR_COUNTER, "action", action).increment();
+    }
+  }
+
+  private <T> void compare(final T databaseResult, final T dynamoResult, final Comparator<T> comparator) {
+    DYNAMO_MIGRATION_COMPARISON_COUNTER.increment();
+
+    if (comparator.compare(databaseResult, dynamoResult) != 0) {
+      DYNAMO_MIGRATION_MISMATCH_COUNTER.increment();
+    }
   }
 }

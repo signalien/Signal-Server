@@ -20,7 +20,7 @@ import java.util.UUID;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
-public class Accounts {
+public class Accounts implements AccountStore {
 
   public static final String ID     = "id";
   public static final String UID    = "uuid";
@@ -46,6 +46,7 @@ public class Accounts {
     this.database.getDatabase().registerRowMapper(new AccountRowMapper());
   }
 
+  @Override
   public boolean create(Account account) {
     return database.with(jdbi -> jdbi.inTransaction(TransactionIsolationLevel.SERIALIZABLE, handle -> {
       try (Timer.Context ignored = createTimer.time()) {
@@ -65,6 +66,7 @@ public class Accounts {
     }));
   }
 
+  @Override
   public void update(Account account) {
     database.use(jdbi -> jdbi.useHandle(handle -> {
       try (Timer.Context ignored = updateTimer.time()) {
@@ -78,6 +80,7 @@ public class Accounts {
     }));
   }
 
+  @Override
   public Optional<Account> get(String number) {
     return database.with(jdbi -> jdbi.withHandle(handle -> {
       try (Timer.Context ignored = getByNumberTimer.time()) {
@@ -89,6 +92,7 @@ public class Accounts {
     }));
   }
 
+  @Override
   public Optional<Account> get(UUID uuid) {
     return database.with(jdbi -> jdbi.withHandle(handle -> {
       try (Timer.Context ignored = getByUuidTimer.time()) {
@@ -123,6 +127,7 @@ public class Accounts {
     }));
   }
 
+  @Override
   public void delete(final UUID uuid) {
     database.use(jdbi -> jdbi.useHandle(handle -> {
       try (Timer.Context ignored = deleteTimer.time()) {
