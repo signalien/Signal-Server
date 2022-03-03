@@ -153,8 +153,8 @@ public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfigura
       DynamoDB messageDynamoDb = Constants.DYNAMO_DB ? new DynamoDB(clientBuilder.build()) : null;
       DynamoDB preKeysDynamoDb = Constants.DYNAMO_DB ? new DynamoDB(keysDynamoDbClientBuilder.build()) : null;
 
-      AmazonDynamoDB accountsDynamoDbClient = accountsDynamoDbClientBuilder.build();
-      AmazonDynamoDBAsync accountsDynamoDbAsyncClient = accountsDynamoDbAsyncClientBuilder.build();
+      AmazonDynamoDB accountsDynamoDbClient = Constants.DYNAMO_DB ? accountsDynamoDbClientBuilder.build() : null;
+      AmazonDynamoDBAsync accountsDynamoDbAsyncClient = Constants.DYNAMO_DB ? accountsDynamoDbAsyncClientBuilder.build() : null;
 
       FaultTolerantRedisCluster cacheCluster = new FaultTolerantRedisCluster("main_cache_cluster", configuration.getCacheClusterConfiguration(), redisClusterClientResources);
 
@@ -170,11 +170,11 @@ public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfigura
 
       ExperimentEnrollmentManager experimentEnrollmentManager = new ExperimentEnrollmentManager(dynamicConfigurationManager);
 
-      DynamoDB migrationDeletedAccountsDynamoDb = new DynamoDB(migrationDeletedAccountsDynamoDbClientBuilder.build());
-      DynamoDB migrationRetryAccountsDynamoDb = new DynamoDB(migrationRetryAccountsDynamoDbClientBuilder.build());
+      DynamoDB migrationDeletedAccountsDynamoDb = Constants.DYNAMO_DB ? new DynamoDB(migrationDeletedAccountsDynamoDbClientBuilder.build()) : null;
+      DynamoDB migrationRetryAccountsDynamoDb = Constants.DYNAMO_DB ? new DynamoDB(migrationRetryAccountsDynamoDbClientBuilder.build()) : null;
 
-      MigrationDeletedAccounts migrationDeletedAccounts = new MigrationDeletedAccounts(migrationDeletedAccountsDynamoDb, configuration.getMigrationDeletedAccountsDynamoDbConfiguration().getTableName());
-      MigrationRetryAccounts migrationRetryAccounts = new MigrationRetryAccounts(migrationRetryAccountsDynamoDb, configuration.getMigrationRetryAccountsDynamoDbConfiguration().getTableName());
+      MigrationDeletedAccounts migrationDeletedAccounts = Constants.DYNAMO_DB ? new MigrationDeletedAccounts(migrationDeletedAccountsDynamoDb, configuration.getMigrationDeletedAccountsDynamoDbConfiguration().getTableName()) : null;
+      MigrationRetryAccounts migrationRetryAccounts = Constants.DYNAMO_DB ? new MigrationRetryAccounts(migrationRetryAccountsDynamoDb, configuration.getMigrationRetryAccountsDynamoDbConfiguration().getTableName()) : null;
 
       Accounts                  accounts             = new Accounts(accountDatabase);
       AccountsDynamoDb          accountsDynamoDb     = Constants.DYNAMO_DB ? new AccountsDynamoDb(accountsDynamoDbClient, accountsDynamoDbAsyncClient, accountsDynamoDbMigrationThreadPool, new DynamoDB(accountsDynamoDbClient), configuration.getAccountsDynamoDbConfiguration().getTableName(), configuration.getAccountsDynamoDbConfiguration().getPhoneNumberTableName(), migrationDeletedAccounts, migrationRetryAccounts) : null;

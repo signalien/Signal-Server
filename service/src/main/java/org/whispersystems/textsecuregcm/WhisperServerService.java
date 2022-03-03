@@ -332,14 +332,14 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     DynamoDB messageDynamoDb = Constants.DYNAMO_DB ? new DynamoDB(messageDynamoDbClientBuilder.build()) : null;
     DynamoDB preKeyDynamoDb = Constants.DYNAMO_DB ? new DynamoDB(keysDynamoDbClientBuilder.build()) : null;
 
-    AmazonDynamoDB accountsDynamoDbClient = accountsDynamoDbClientBuilder.build();
-    AmazonDynamoDBAsync accountsDynamodbAsyncClient = accountsDynamoDbAsyncClientBuilder.build();
+    AmazonDynamoDB accountsDynamoDbClient = Constants.DYNAMO_DB ? accountsDynamoDbClientBuilder.build() : null;
+    AmazonDynamoDBAsync accountsDynamodbAsyncClient = Constants.DYNAMO_DB ? accountsDynamoDbAsyncClientBuilder.build() : null;
 
-    DynamoDB recentlyDeletedAccountsDynamoDb = new DynamoDB(migrationDeletedAccountsDynamoDbClientBuilder.build());
-    DynamoDB migrationRetryAccountsDynamoDb = new DynamoDB(migrationRetryAccountsDynamoDbClientBuilder.build());
+    DynamoDB recentlyDeletedAccountsDynamoDb = Constants.DYNAMO_DB ? new DynamoDB(migrationDeletedAccountsDynamoDbClientBuilder.build()) : null;
+    DynamoDB migrationRetryAccountsDynamoDb = Constants.DYNAMO_DB ? new DynamoDB(migrationRetryAccountsDynamoDbClientBuilder.build()) : null;
 
-    MigrationDeletedAccounts migrationDeletedAccounts = new MigrationDeletedAccounts(recentlyDeletedAccountsDynamoDb, config.getMigrationDeletedAccountsDynamoDbConfiguration().getTableName());
-    MigrationRetryAccounts migrationRetryAccounts = new MigrationRetryAccounts(migrationRetryAccountsDynamoDb, config.getMigrationRetryAccountsDynamoDbConfiguration().getTableName());
+    MigrationDeletedAccounts migrationDeletedAccounts = Constants.DYNAMO_DB ? new MigrationDeletedAccounts(recentlyDeletedAccountsDynamoDb, config.getMigrationDeletedAccountsDynamoDbConfiguration().getTableName()) : null;
+    MigrationRetryAccounts migrationRetryAccounts = Constants.DYNAMO_DB ? new MigrationRetryAccounts(migrationRetryAccountsDynamoDb, config.getMigrationRetryAccountsDynamoDbConfiguration().getTableName()) : null;
 
     Accounts          accounts          = new Accounts(accountDatabase);
     AccountsDynamoDb  accountsDynamoDb  = Constants.DYNAMO_DB ? new AccountsDynamoDb(accountsDynamoDbClient, accountsDynamodbAsyncClient, accountsDynamoDbMigrationThreadPool, new DynamoDB(accountsDynamoDbClient), config.getAccountsDynamoDbConfiguration().getTableName(), config.getAccountsDynamoDbConfiguration().getPhoneNumberTableName(), migrationDeletedAccounts, migrationRetryAccounts) : null;
