@@ -5,6 +5,7 @@
 
 package org.whispersystems.textsecuregcm.tests.storage;
 
+import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException;
 import io.lettuce.core.RedisException;
 import io.lettuce.core.cluster.api.sync.RedisAdvancedClusterCommands;
 import org.junit.jupiter.api.Assertions;
@@ -42,6 +43,7 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -360,6 +362,44 @@ class AccountsManagerTest {
     verifyNoMoreInteractions(accountsDynamoDb);
   }
 
+  @Test
+  void testUpdate_dynamoConditionFailed() {
+    RedisAdvancedClusterCommands<String, String> commands            = mock(RedisAdvancedClusterCommands.class);
+    FaultTolerantRedisCluster                    cacheCluster        = RedisClusterHelper.buildMockRedisCluster(commands);
+    Accounts                                     accounts            = mock(Accounts.class);
+    AccountsDynamoDb                             accountsDynamoDb    = mock(AccountsDynamoDb.class);
+    DirectoryManager                             directoryManager    = mock(DirectoryManager.class);
+    DirectoryQueue                               directoryQueue      = mock(DirectoryQueue.class);
+    Keys                                         keys                = mock(Keys.class);
+    KeysDynamoDb                                 keysDynamoDb        = mock(KeysDynamoDb.class);
+    MessagesManager                              messagesManager     = mock(MessagesManager.class);
+    UsernamesManager                             usernamesManager    = mock(UsernamesManager.class);
+    ProfilesManager                              profilesManager     = mock(ProfilesManager.class);
+    SecureBackupClient                           secureBackupClient  = mock(SecureBackupClient.class);
+    SecureStorageClient                          secureStorageClient = mock(SecureStorageClient.class);
+    UUID                                         uuid                = UUID.randomUUID();
+    Account                                      account             = new Account("+14152222222", uuid, new HashSet<>(), new byte[16]);
+
+    enableDynamo(true);
+
+    when(commands.get(eq("Account3::" + uuid))).thenReturn(null);
+    doThrow(ConditionalCheckFailedException.class).when(accountsDynamoDb).update(any(Account.class));
+
+    AccountsManager   accountsManager = new AccountsManager(accounts, accountsDynamoDb, directoryManager, cacheCluster, directoryQueue, keys, keysDynamoDb, messagesManager, usernamesManager, profilesManager, secureStorageClient, secureBackupClient, experimentEnrollmentManager, dynamicConfigurationManager);
+
+    assertEquals(0, account.getDynamoDbMigrationVersion());
+
+    accountsManager.update(account);
+
+    assertEquals(1, account.getDynamoDbMigrationVersion());
+
+    verify(accounts, times(1)).update(account);
+    verifyNoMoreInteractions(accounts);
+
+    verify(accountsDynamoDb, times(1)).update(account);
+    verify(accountsDynamoDb, times(1)).create(account);
+    verifyNoMoreInteractions(accountsDynamoDb);
+  }
 
   @Test
   void testCompareAccounts() {
