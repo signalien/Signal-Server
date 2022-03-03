@@ -6,12 +6,12 @@
 package org.whispersystems.textsecuregcm.tests.storage;
 
 import com.opentable.db.postgres.embedded.LiquibasePreparer;
-import com.opentable.db.postgres.junit.EmbeddedPostgresRules;
-import com.opentable.db.postgres.junit.PreparedDbRule;
+import com.opentable.db.postgres.junit5.EmbeddedPostgresExtension;
+import com.opentable.db.postgres.junit5.PreparedDbExtension;
 import org.jdbi.v3.core.Jdbi;
-import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.whispersystems.textsecuregcm.auth.StoredVerificationCode;
 import org.whispersystems.textsecuregcm.configuration.CircuitBreakerConfiguration;
 import org.whispersystems.textsecuregcm.storage.FaultTolerantDatabase;
@@ -24,20 +24,20 @@ import java.util.Optional;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
-public class PendingAccountsTest {
+class PendingAccountsTest {
 
-  @Rule
-  public PreparedDbRule db = EmbeddedPostgresRules.preparedDatabase(LiquibasePreparer.forClasspathLocation("accountsdb.xml"));
+  @RegisterExtension
+  static PreparedDbExtension db = EmbeddedPostgresExtension.preparedDatabase(LiquibasePreparer.forClasspathLocation("accountsdb.xml"));
 
   private PendingAccounts pendingAccounts;
 
-  @Before
-  public void setupAccountsDao() {
+  @BeforeEach
+  void setupAccountsDao() {
     this.pendingAccounts = new PendingAccounts(new FaultTolerantDatabase("pending_accounts-test", Jdbi.create(db.getTestDatabase()), new CircuitBreakerConfiguration()));
   }
 
   @Test
-  public void testStore() throws SQLException {
+  void testStore() throws SQLException {
     pendingAccounts.insert("+14151112222", "1234", 1111, null);
 
     PreparedStatement statement = db.getTestDatabase().getConnection().prepareStatement("SELECT * FROM pending_accounts WHERE number = ?");
@@ -57,7 +57,7 @@ public class PendingAccountsTest {
   }
 
   @Test
-  public void testStoreWithPushChallenge() throws SQLException {
+  void testStoreWithPushChallenge() throws SQLException {
     pendingAccounts.insert("+14151112222", null, 1111,  "112233");
 
     PreparedStatement statement = db.getTestDatabase().getConnection().prepareStatement("SELECT * FROM pending_accounts WHERE number = ?");
@@ -77,7 +77,7 @@ public class PendingAccountsTest {
   }
 
   @Test
-  public void testRetrieve() throws Exception {
+  void testRetrieve() throws Exception {
     pendingAccounts.insert("+14151112222", "4321", 2222, null);
     pendingAccounts.insert("+14151113333", "1212", 5555, null);
 
@@ -92,7 +92,7 @@ public class PendingAccountsTest {
   }
 
   @Test
-  public void testRetrieveWithPushChallenge() throws Exception {
+  void testRetrieveWithPushChallenge() throws Exception {
     pendingAccounts.insert("+14151112222", "4321", 2222, "bar");
     pendingAccounts.insert("+14151113333", "1212", 5555, "bang");
 
@@ -108,7 +108,7 @@ public class PendingAccountsTest {
   }
 
   @Test
-  public void testOverwrite() throws Exception {
+  void testOverwrite() throws Exception {
     pendingAccounts.insert("+14151112222", "4321", 2222, null);
     pendingAccounts.insert("+14151112222", "4444", 3333, null);
 
@@ -120,7 +120,7 @@ public class PendingAccountsTest {
   }
 
   @Test
-  public void testOverwriteWithPushToken() throws Exception {
+  void testOverwriteWithPushToken() throws Exception {
     pendingAccounts.insert("+14151112222", "4321", 2222, "bar");
     pendingAccounts.insert("+14151112222", "4444", 3333, "bang");
 
@@ -134,7 +134,7 @@ public class PendingAccountsTest {
 
 
   @Test
-  public void testVacuum() {
+  void testVacuum() {
     pendingAccounts.insert("+14151112222", "4321", 2222, null);
     pendingAccounts.insert("+14151112222", "4444", 3333, null);
     pendingAccounts.vacuum();
@@ -147,7 +147,7 @@ public class PendingAccountsTest {
   }
 
   @Test
-  public void testRemove() {
+  void testRemove() {
     pendingAccounts.insert("+14151112222", "4321", 2222, "bar");
     pendingAccounts.insert("+14151113333", "1212", 5555, null);
 
