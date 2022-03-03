@@ -35,6 +35,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.whispersystems.textsecuregcm.util.SystemMapper;
 import org.whispersystems.textsecuregcm.util.UUIDUtil;
 
@@ -55,6 +57,9 @@ public class AccountsDynamoDb extends AbstractDynamoDbStore implements AccountSt
 
   private final ThreadPoolExecutor migrationThreadPool;
 
+  private final MigrationDeletedAccounts migrationDeletedAccounts;
+  private final MigrationRetryAccounts migrationRetryAccounts;
+
   private final String phoneNumbersTableName;
 
   private static final Timer CREATE_TIMER = Metrics.timer(name(AccountsDynamoDb.class, "create"));
@@ -63,7 +68,13 @@ public class AccountsDynamoDb extends AbstractDynamoDbStore implements AccountSt
   private static final Timer GET_BY_UUID_TIMER = Metrics.timer(name(AccountsDynamoDb.class, "getByUuid"));
   private static final Timer DELETE_TIMER = Metrics.timer(name(AccountsDynamoDb.class, "delete"));
 
-  public AccountsDynamoDb(AmazonDynamoDB client, AmazonDynamoDBAsync asyncClient, ThreadPoolExecutor migrationThreadPool, DynamoDB dynamoDb, String accountsTableName, String phoneNumbersTableName) {
+  private final Logger logger = LoggerFactory.getLogger(AccountsDynamoDb.class);
+
+  public AccountsDynamoDb(AmazonDynamoDB client, AmazonDynamoDBAsync asyncClient,
+      ThreadPoolExecutor migrationThreadPool, DynamoDB dynamoDb, String accountsTableName, String phoneNumbersTableName,
+      MigrationDeletedAccounts migrationDeletedAccounts,
+      MigrationRetryAccounts accountsMigrationErrors) {
+
     super(dynamoDb);
 
     this.client = client;
@@ -72,6 +83,9 @@ public class AccountsDynamoDb extends AbstractDynamoDbStore implements AccountSt
 
     this.asyncClient = asyncClient;
     this.migrationThreadPool = migrationThreadPool;
+
+    this.migrationDeletedAccounts = migrationDeletedAccounts;
+    this.migrationRetryAccounts = accountsMigrationErrors;
   }
 
   @Override
@@ -208,27 +222,39 @@ public class AccountsDynamoDb extends AbstractDynamoDbStore implements AccountSt
   public void delete(UUID uuid) {
     DELETE_TIMER.record(() -> {
 
-      Optional<Account> maybeAccount = get(uuid);
-
-      maybeAccount.ifPresent(account -> {
-
-        TransactWriteItem phoneNumberDelete = new TransactWriteItem()
-            .withDelete(new Delete()
-                .withTableName(phoneNumbersTableName)
-                .withKey(Map.of(ATTR_ACCOUNT_E164, new AttributeValue(account.getNumber()))));
-
-        TransactWriteItem accountDelete = new TransactWriteItem().withDelete(
-            new Delete()
-                .withTableName(accountsTable.getTableName())
-                .withKey(Map.of(KEY_ACCOUNT_UUID, new AttributeValue().withB(UUIDUtil.toByteBuffer(uuid)))));
-
-        TransactWriteItemsRequest request = new TransactWriteItemsRequest()
-            .withTransactItems(phoneNumberDelete, accountDelete);
-
-        client.transactWriteItems(request);
-      });
+      delete(uuid, true);
     });
   }
+
+  private void delete(UUID uuid, boolean saveInDeletedAccountsTable) {
+
+    if (saveInDeletedAccountsTable) {
+      migrationDeletedAccounts.put(uuid);
+    }
+
+    Optional<Account> maybeAccount = get(uuid);
+
+    maybeAccount.ifPresent(account -> {
+
+      TransactWriteItem phoneNumberDelete = new TransactWriteItem()
+          .withDelete(new Delete()
+              .withTableName(phoneNumbersTableName)
+              .withKey(Map.of(ATTR_ACCOUNT_E164, new AttributeValue(account.getNumber()))));
+
+      TransactWriteItem accountDelete = new TransactWriteItem().withDelete(
+          new Delete()
+              .withTableName(accountsTable.getTableName())
+              .withKey(Map.of(KEY_ACCOUNT_UUID, new AttributeValue().withB(UUIDUtil.toByteBuffer(uuid)))));
+
+      TransactWriteItemsRequest request = new TransactWriteItemsRequest()
+          .withTransactItems(phoneNumberDelete, accountDelete);
+
+      client.transactWriteItems(request);
+    });
+  }
+
+  private static final Counter MIGRATED_COUNTER = Metrics.counter(name(AccountsDynamoDb.class, "migration", "count"));
+  private static final Counter ERROR_COUNTER = Metrics.counter(name(AccountsDynamoDb.class, "migration", "error"));
 
   public CompletableFuture<Void> migrate(List<Account> accounts, int threads) {
 
@@ -246,11 +272,21 @@ public class AccountsDynamoDb extends AbstractDynamoDbStore implements AccountSt
         }))
         .collect(Collectors.toList());
 
-    return CompletableFuture.allOf(futures.toArray(new CompletableFuture[]{}));
+    CompletableFuture<Void> migrationBatch = CompletableFuture.allOf(futures.toArray(new CompletableFuture[]{}));
+
+    return migrationBatch.whenComplete((result, exception) -> deleteRecentlyDeletedUuids());
   }
 
-  private static final Counter MIGRATED_COUNTER = Metrics.counter(name(AccountsDynamoDb.class, "migration", "count"));
-  private static final Counter ERROR_COUNTER = Metrics.counter(name(AccountsDynamoDb.class, "migration", "error"));
+  public void deleteRecentlyDeletedUuids() {
+
+    final List<UUID> recentlyDeletedUuids = migrationDeletedAccounts.getRecentlyDeletedUuids();
+
+    for (UUID recentlyDeletedUuid : recentlyDeletedUuids) {
+      delete(recentlyDeletedUuid, false);
+    }
+
+    migrationDeletedAccounts.delete(recentlyDeletedUuids);
+  }
 
   public CompletableFuture<Boolean> migrate(Account account) {
     try {
@@ -279,7 +315,11 @@ public class AccountsDynamoDb extends AbstractDynamoDbStore implements AccountSt
                 // account is already migrated
                 resultFuture.complete(false);
               } else {
-                ERROR_COUNTER.increment();
+                try {
+                  migrationRetryAccounts.put(account.getUuid());
+                } catch (final Exception e) {
+                  logger.error("Could not store account {}", account.getUuid());
+                }
                 resultFuture.completeExceptionally(exception);
               }
             }
