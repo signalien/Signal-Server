@@ -15,7 +15,12 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.temporal.ChronoField;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Locale;
+import java.util.Locale.LanguageRange;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -187,5 +192,9 @@ public class Util {
   public static long todayInMillisGivenOffsetFromNow(Clock clock, Duration offset) {
     final long currentTimeSeconds = offset.addTo(clock.instant()).getLong(ChronoField.INSTANT_SECONDS);
     return TimeUnit.DAYS.toMillis(TimeUnit.SECONDS.toDays(currentTimeSeconds));
+  }
+
+  public static Optional<String> findBestLocale(List<LanguageRange> priorityList, Collection<String> supportedLocales) {
+    return Optional.ofNullable(Locale.lookupTag(priorityList, supportedLocales));
   }
 }
