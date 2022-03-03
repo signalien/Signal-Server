@@ -182,7 +182,7 @@ public class MessagesDynamoDb extends AbstractDynamoDbStore {
         deleteItemSpec.withReturnValues(ReturnValue.ALL_OLD);
       }
       final DeleteItemOutcome deleteItemOutcome = table.deleteItem(deleteItemSpec);
-      if (deleteItemOutcome.getItem().hasAttribute(KEY_PARTITION)) {
+      if (deleteItemOutcome.getItem() != null && deleteItemOutcome.getItem().hasAttribute(KEY_PARTITION)) {
         result = Optional.of(convertItemToOutgoingMessageEntity(deleteItemOutcome.getItem()));
       }
     }
