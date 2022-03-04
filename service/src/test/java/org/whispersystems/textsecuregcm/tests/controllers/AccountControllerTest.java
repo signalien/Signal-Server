@@ -1371,7 +1371,7 @@ class AccountControllerTest {
   }
 
   @ParameterizedTest
-  @CsvSource("/v1/accounts/whoami/, /v1/accounts/me/")
+  @ValueSource(strings = {"/v1/accounts/whoami/", "/v1/accounts/me/"})
   public void testWhoAmI(final String path) {
     AccountCreationResult response =
         resources.getJerseyTest()
