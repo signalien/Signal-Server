@@ -45,7 +45,7 @@ public class PendingDevices {
   public Optional<StoredVerificationCode> getCodeForNumber(String number) {
     return database.with(jdbi -> jdbi.withHandle(handle -> {
       try (Timer.Context timer = getCodeForNumberTimer.time()) {
-        return handle.createQuery("SELECT verification_code, timestamp, NULL as push_code FROM pending_devices WHERE number = :number")
+        return handle.createQuery("SELECT verification_code, timestamp, NULL as push_code, NULL as twilio_verification_sid FROM pending_devices WHERE number = :number")
                      .bind("number", number)
                      .mapTo(StoredVerificationCode.class)
                      .findFirst();

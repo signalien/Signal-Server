@@ -7,6 +7,7 @@ package org.whispersystems.textsecuregcm.storage;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
 import com.codahale.metrics.Timer;
+import com.google.common.annotations.VisibleForTesting;
 import org.whispersystems.textsecuregcm.auth.StoredVerificationCode;
 import org.whispersystems.textsecuregcm.storage.mappers.StoredVerificationCodeRowMapper;
 import org.whispersystems.textsecuregcm.util.Constants;
@@ -30,17 +31,23 @@ public class PendingAccounts {
     this.database.getDatabase().registerRowMapper(new StoredVerificationCodeRowMapper());
   }
 
-  public void insert(String number, String verificationCode, long timestamp, String pushCode) {
+  @VisibleForTesting
+  public void insert (String number, String verificationCode, long timestamp, String pushCode) {
+    insert(number, verificationCode, timestamp, pushCode, null);
+  }
+
+  public void insert(String number, String verificationCode, long timestamp, String pushCode, String twilioVerificationSid) {
     database.use(jdbi -> jdbi.useHandle(handle -> {
       try (Timer.Context ignored = insertTimer.time()) {
-        handle.createUpdate("INSERT INTO pending_accounts (number, verification_code, timestamp, push_code) " +
-                                "VALUES (:number, :verification_code, :timestamp, :push_code) " +
+        handle.createUpdate("INSERT INTO pending_accounts (number, verification_code, timestamp, push_code, twilio_verification_sid) " +
+                                "VALUES (:number, :verification_code, :timestamp, :push_code, :twilio_verification_sid) " +
                                 "ON CONFLICT(number) DO UPDATE " +
-                                "SET verification_code = EXCLUDED.verification_code, timestamp = EXCLUDED.timestamp, push_code = EXCLUDED.push_code")
+                                "SET verification_code = EXCLUDED.verification_code, timestamp = EXCLUDED.timestamp, push_code = EXCLUDED.push_code, twilio_verification_sid = EXCLUDED.twilio_verification_sid")
               .bind("verification_code", verificationCode)
               .bind("timestamp", timestamp)
               .bind("number", number)
               .bind("push_code", pushCode)
+              .bind("twilio_verification_sid", twilioVerificationSid)
               .execute();
       }
     }));
@@ -49,7 +56,7 @@ public class PendingAccounts {
   public Optional<StoredVerificationCode> getCodeForNumber(String number) {
     return database.with(jdbi ->jdbi.withHandle(handle -> {
       try (Timer.Context ignored = getCodeForNumberTimer.time()) {
-        return handle.createQuery("SELECT verification_code, timestamp, push_code FROM pending_accounts WHERE number = :number")
+        return handle.createQuery("SELECT verification_code, timestamp, push_code, twilio_verification_sid FROM pending_accounts WHERE number = :number")
                      .bind("number", number)
                      .mapTo(StoredVerificationCode.class)
                      .findFirst();
