@@ -6,27 +6,36 @@
 package org.whispersystems.textsecuregcm.tests.controllers;
 
 import com.google.common.collect.ImmutableSet;
+import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
+import io.dropwizard.testing.junit5.ResourceExtension;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
-import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
 import org.whispersystems.textsecuregcm.auth.AmbiguousIdentifier;
 import org.whispersystems.textsecuregcm.auth.DisabledPermittedAccount;
 import org.whispersystems.textsecuregcm.auth.OptionalAccess;
 import org.whispersystems.textsecuregcm.controllers.KeysController;
+import org.whispersystems.textsecuregcm.controllers.RateLimitExceededException;
 import org.whispersystems.textsecuregcm.entities.PreKey;
 import org.whispersystems.textsecuregcm.entities.PreKeyCount;
 import org.whispersystems.textsecuregcm.entities.PreKeyResponse;
 import org.whispersystems.textsecuregcm.entities.PreKeyState;
+import org.whispersystems.textsecuregcm.entities.RateLimitChallenge;
 import org.whispersystems.textsecuregcm.entities.SignedPreKey;
+import org.whispersystems.textsecuregcm.limits.PreKeyRateLimiter;
+import org.whispersystems.textsecuregcm.limits.RateLimitChallengeManager;
 import org.whispersystems.textsecuregcm.limits.RateLimiter;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
+import org.whispersystems.textsecuregcm.mappers.RateLimitChallengeExceptionMapper;
 import org.whispersystems.textsecuregcm.sqs.DirectoryQueue;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
+import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.Keys;
 import org.whispersystems.textsecuregcm.storage.KeysDynamoDb;
 import org.whispersystems.textsecuregcm.tests.util.AuthHelper;
@@ -34,6 +43,8 @@ import org.whispersystems.textsecuregcm.tests.util.AuthHelper;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.time.Duration;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -43,11 +54,11 @@ import java.util.Set;
 import java.util.UUID;
 
 import io.dropwizard.auth.PolymorphicAuthValueFactoryProvider;
-import io.dropwizard.testing.junit.ResourceTestRule;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
-public class KeysControllerTest {
+@ExtendWith(DropwizardExtensionsSupport.class)
+class KeysControllerTest {
 
   private static final String EXISTS_NUMBER = "+14152222222";
   private static final UUID   EXISTS_UUID   = UUID.randomUUID();
@@ -70,25 +81,29 @@ public class KeysControllerTest {
   private final SignedPreKey SAMPLE_SIGNED_KEY3      = new SignedPreKey( 3333, "barfoo", "sig33"    );
   private final SignedPreKey VALID_DEVICE_SIGNED_KEY = new SignedPreKey(89898, "zoofarb", "sigvalid");
 
-  private final Keys                        keys                        = mock(Keys.class                       );
-  private final KeysDynamoDb                keysDynamoDb                = mock(KeysDynamoDb.class               );
-  private final AccountsManager             accounts                    = mock(AccountsManager.class            );
-  private final DirectoryQueue              directoryQueue              = mock(DirectoryQueue.class             );
-  private final Account                     existsAccount               = mock(Account.class                    );
+  private final static Keys                        keys                        = mock(Keys.class                       );
+  private final static KeysDynamoDb                keysDynamoDb                = mock(KeysDynamoDb.class               );
+  private final static AccountsManager             accounts                    = mock(AccountsManager.class            );
+  private final static DirectoryQueue              directoryQueue              = mock(DirectoryQueue.class             );
+  private final static PreKeyRateLimiter           preKeyRateLimiter           = mock(PreKeyRateLimiter.class          );
+  private final static RateLimitChallengeManager   rateLimitChallengeManager   = mock(RateLimitChallengeManager.class  );
+  private final static Account                     existsAccount               = mock(Account.class                    );
 
-  private RateLimiters          rateLimiters  = mock(RateLimiters.class);
-  private RateLimiter           rateLimiter   = mock(RateLimiter.class );
+  private final static DynamicConfigurationManager dynamicConfigurationManager = mock(DynamicConfigurationManager.class);
 
-  @Rule
-  public final ResourceTestRule resources = ResourceTestRule.builder()
+  private static final RateLimiters          rateLimiters  = mock(RateLimiters.class);
+  private static final RateLimiter           rateLimiter   = mock(RateLimiter.class );
+
+  private static final ResourceExtension resources = ResourceExtension.builder()
                                                             .addProvider(AuthHelper.getAuthFilter())
                                                             .addProvider(new PolymorphicAuthValueFactoryProvider.Binder<>(ImmutableSet.of(Account.class, DisabledPermittedAccount.class)))
                                                             .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
-                                                            .addResource(new KeysController(rateLimiters, keys, keysDynamoDb, accounts, directoryQueue))
+                                                            .addResource(new RateLimitChallengeExceptionMapper(rateLimitChallengeManager))
+                                                            .addResource(new KeysController(rateLimiters, keys, keysDynamoDb, accounts, directoryQueue, preKeyRateLimiter, dynamicConfigurationManager, rateLimitChallengeManager))
                                                             .build();
 
-  @Before
-  public void setup() {
+  @BeforeEach
+  void setup() {
     final Device sampleDevice  = mock(Device.class);
     final Device sampleDevice2 = mock(Device.class);
     final Device sampleDevice3 = mock(Device.class);
@@ -154,8 +169,23 @@ public class KeysControllerTest {
     when(AuthHelper.VALID_ACCOUNT.getIdentityKey()).thenReturn(null);
   }
 
+  @AfterEach
+  void teardown() {
+    reset(
+        keysDynamoDb,
+        accounts,
+        directoryQueue,
+        preKeyRateLimiter,
+        existsAccount,
+        rateLimiters,
+        rateLimiter,
+        dynamicConfigurationManager,
+        rateLimitChallengeManager
+    );
+  }
+
   @Test
-  public void validKeyStatusTestByNumberV2() throws Exception {
+  void validKeyStatusTestByNumberV2() throws Exception {
     PreKeyCount result = resources.getJerseyTest()
                                   .target("/v2/keys")
                                   .request()
@@ -169,7 +199,7 @@ public class KeysControllerTest {
   }
 
   @Test
-  public void validKeyStatusTestByUuidV2() throws Exception {
+  void validKeyStatusTestByUuidV2() throws Exception {
     PreKeyCount result = resources.getJerseyTest()
                                   .target("/v2/keys")
                                   .request()
@@ -184,7 +214,7 @@ public class KeysControllerTest {
 
 
   @Test
-  public void getSignedPreKeyV2ByNumber() throws Exception {
+  void getSignedPreKeyV2ByNumber() throws Exception {
     SignedPreKey result = resources.getJerseyTest()
                                    .target("/v2/keys/signed")
                                    .request()
@@ -197,7 +227,7 @@ public class KeysControllerTest {
   }
 
   @Test
-  public void getSignedPreKeyV2ByUuid() throws Exception {
+  void getSignedPreKeyV2ByUuid() throws Exception {
     SignedPreKey result = resources.getJerseyTest()
                                    .target("/v2/keys/signed")
                                    .request()
@@ -210,7 +240,7 @@ public class KeysControllerTest {
   }
 
   @Test
-  public void putSignedPreKeyV2ByNumber() throws Exception {
+  void putSignedPreKeyV2ByNumber() throws Exception {
     SignedPreKey   test     = new SignedPreKey(9999, "fooozzz", "baaarzzz");
     Response response = resources.getJerseyTest()
                                        .target("/v2/keys/signed")
@@ -225,7 +255,7 @@ public class KeysControllerTest {
   }
 
   @Test
-  public void putSignedPreKeyV2ByUuid() throws Exception {
+  void putSignedPreKeyV2ByUuid() throws Exception {
     SignedPreKey   test     = new SignedPreKey(9998, "fooozzz", "baaarzzz");
     Response response = resources.getJerseyTest()
                                  .target("/v2/keys/signed")
@@ -241,7 +271,7 @@ public class KeysControllerTest {
 
 
   @Test
-  public void disabledPutSignedPreKeyV2ByNumber() throws Exception {
+  void disabledPutSignedPreKeyV2ByNumber() throws Exception {
     SignedPreKey   test     = new SignedPreKey(9999, "fooozzz", "baaarzzz");
     Response response = resources.getJerseyTest()
                                  .target("/v2/keys/signed")
@@ -253,7 +283,7 @@ public class KeysControllerTest {
   }
 
   @Test
-  public void disabledPutSignedPreKeyV2ByUuid() throws Exception {
+  void disabledPutSignedPreKeyV2ByUuid() throws Exception {
     SignedPreKey   test     = new SignedPreKey(9999, "fooozzz", "baaarzzz");
     Response response = resources.getJerseyTest()
                                  .target("/v2/keys/signed")
@@ -266,7 +296,7 @@ public class KeysControllerTest {
 
 
   @Test
-  public void validSingleRequestTestV2ByNumber() throws Exception {
+  void validSingleRequestTestV2ByNumber() throws Exception {
     PreKeyResponse result = resources.getJerseyTest()
                                      .target(String.format("/v2/keys/%s/1", EXISTS_NUMBER))
                                      .request()
@@ -284,7 +314,7 @@ public class KeysControllerTest {
   }
 
   @Test
-  public void validSingleRequestTestV2ByUuid() throws Exception {
+  void validSingleRequestTestV2ByUuid() throws Exception {
     PreKeyResponse result = resources.getJerseyTest()
                                      .target(String.format("/v2/keys/%s/1", EXISTS_UUID))
                                      .request()
@@ -303,7 +333,7 @@ public class KeysControllerTest {
 
 
   @Test
-  public void testUnidentifiedRequestByNumber() throws Exception {
+  void testUnidentifiedRequestByNumber() throws Exception {
     PreKeyResponse result = resources.getJerseyTest()
                                      .target(String.format("/v2/keys/%s/1", EXISTS_NUMBER))
                                      .request()
@@ -321,7 +351,7 @@ public class KeysControllerTest {
   }
 
   @Test
-  public void testUnidentifiedRequestByUuid() throws Exception {
+  void testUnidentifiedRequestByUuid() throws Exception {
     PreKeyResponse result = resources.getJerseyTest()
                                      .target(String.format("/v2/keys/%s/1", EXISTS_UUID.toString()))
                                      .request()
@@ -338,9 +368,23 @@ public class KeysControllerTest {
     verifyNoMoreInteractions(keysDynamoDb);
   }
 
+  @Test
+  void testNoDevices() {
+
+    when(existsAccount.getDevices()).thenReturn(Collections.emptySet());
+
+    Response result = resources.getJerseyTest()
+        .target(String.format("/v2/keys/%s/*", EXISTS_UUID.toString()))
+        .request()
+        .header(OptionalAccess.UNIDENTIFIED, AuthHelper.getUnidentifiedAccessHeader("1337".getBytes()))
+        .get();
+
+    assertThat(result).isNotNull();
+    assertThat(result.getStatus()).isEqualTo(404);
+  }
 
   @Test
-  public void testUnauthorizedUnidentifiedRequest() throws Exception {
+  void testUnauthorizedUnidentifiedRequest() throws Exception {
     Response response = resources.getJerseyTest()
                                      .target(String.format("/v2/keys/%s/1", EXISTS_NUMBER))
                                      .request()
@@ -352,7 +396,7 @@ public class KeysControllerTest {
   }
 
   @Test
-  public void testMalformedUnidentifiedRequest() throws Exception {
+  void testMalformedUnidentifiedRequest() throws Exception {
     Response response = resources.getJerseyTest()
                                  .target(String.format("/v2/keys/%s/1", EXISTS_NUMBER))
                                  .request()
@@ -365,7 +409,7 @@ public class KeysControllerTest {
 
 
   @Test
-  public void validMultiRequestTestV2ByNumber() throws Exception {
+  void validMultiRequestTestV2ByNumber() throws Exception {
     PreKeyResponse results = resources.getJerseyTest()
                                       .target(String.format("/v2/keys/%s/*", EXISTS_NUMBER))
                                       .request()
@@ -415,7 +459,7 @@ public class KeysControllerTest {
   }
 
   @Test
-  public void validMultiRequestTestV2ByUuid() throws Exception {
+  void validMultiRequestTestV2ByUuid() throws Exception {
     PreKeyResponse results = resources.getJerseyTest()
                                       .target(String.format("/v2/keys/%s/*", EXISTS_UUID.toString()))
                                       .request()
@@ -466,7 +510,7 @@ public class KeysControllerTest {
 
 
   @Test
-  public void invalidRequestTestV2() throws Exception {
+  void invalidRequestTestV2() throws Exception {
     Response response = resources.getJerseyTest()
                                  .target(String.format("/v2/keys/%s", NOT_EXISTS_NUMBER))
                                  .request()
@@ -477,7 +521,7 @@ public class KeysControllerTest {
   }
 
   @Test
-  public void anotherInvalidRequestTestV2() throws Exception {
+  void anotherInvalidRequestTestV2() throws Exception {
     Response response = resources.getJerseyTest()
                                  .target(String.format("/v2/keys/%s/22", EXISTS_NUMBER))
                                  .request()
@@ -488,7 +532,7 @@ public class KeysControllerTest {
   }
 
   @Test
-  public void unauthorizedRequestTestV2() throws Exception {
+  void unauthorizedRequestTestV2() throws Exception {
     Response response =
         resources.getJerseyTest()
                  .target(String.format("/v2/keys/%s/1", EXISTS_NUMBER))
@@ -508,7 +552,7 @@ public class KeysControllerTest {
   }
 
   @Test
-  public void putKeysTestV2() throws Exception {
+  void putKeysTestV2() throws Exception {
     final PreKey       preKey       = new PreKey(31337, "foobar");
     final SignedPreKey signedPreKey = new SignedPreKey(31338, "foobaz", "myvalidsig");
     final String       identityKey  = "barbar";
@@ -542,7 +586,7 @@ public class KeysControllerTest {
   }
 
   @Test
-  public void disabledPutKeysTestV2() throws Exception {
+  void disabledPutKeysTestV2() throws Exception {
     final PreKey       preKey       = new PreKey(31337, "foobar");
     final SignedPreKey signedPreKey = new SignedPreKey(31338, "foobaz", "myvalidsig");
     final String       identityKey  = "barbar";
@@ -575,5 +619,42 @@ public class KeysControllerTest {
     verify(accounts).update(AuthHelper.DISABLED_ACCOUNT);
   }
 
+  @Test
+  void testRateLimitChallenge() throws RateLimitExceededException {
 
+    Duration retryAfter = Duration.ofMinutes(1);
+    doThrow(new RateLimitExceededException(retryAfter))
+        .when(preKeyRateLimiter).validate(any());
+
+    when(rateLimitChallengeManager.shouldIssueRateLimitChallenge("Signal-Android/5.1.2 Android/30")).thenReturn(true);
+    when(rateLimitChallengeManager.getChallengeOptions(AuthHelper.VALID_ACCOUNT))
+        .thenReturn(List.of(RateLimitChallengeManager.OPTION_PUSH_CHALLENGE, RateLimitChallengeManager.OPTION_RECAPTCHA));
+
+    Response result = resources.getJerseyTest()
+        .target(String.format("/v2/keys/%s/*", EXISTS_UUID.toString()))
+        .request()
+        .header(OptionalAccess.UNIDENTIFIED, AuthHelper.getUnidentifiedAccessHeader("1337".getBytes()))
+        .header("User-Agent", "Signal-Android/5.1.2 Android/30")
+        .get();
+
+    // unidentified access should not be rate limited
+    assertThat(result.getStatus()).isEqualTo(200);
+
+    result = resources.getJerseyTest()
+        .target(String.format("/v2/keys/%s/*", EXISTS_UUID.toString()))
+        .request()
+        .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_PASSWORD))
+        .header("User-Agent", "Signal-Android/5.1.2 Android/30")
+        .get();
+
+    assertThat(result.getStatus()).isEqualTo(428);
+
+    RateLimitChallenge rateLimitChallenge = result.readEntity(RateLimitChallenge.class);
+
+    assertThat(rateLimitChallenge.getToken()).isNotBlank();
+    assertThat(rateLimitChallenge.getOptions()).isNotEmpty();
+    assertThat(rateLimitChallenge.getOptions()).contains("recaptcha");
+    assertThat(rateLimitChallenge.getOptions()).contains("pushChallenge");
+    assertThat(Long.parseLong(result.getHeaderString("Retry-After"))).isEqualTo(retryAfter.toSeconds());
+  }
 }

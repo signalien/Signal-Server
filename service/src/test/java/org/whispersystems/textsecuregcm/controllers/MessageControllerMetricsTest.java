@@ -7,7 +7,9 @@ package org.whispersystems.textsecuregcm.controllers;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.whispersystems.textsecuregcm.limits.RateLimitChallengeManager;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
+import org.whispersystems.textsecuregcm.limits.UnsealedSenderRateLimiter;
 import org.whispersystems.textsecuregcm.push.ApnFallbackManager;
 import org.whispersystems.textsecuregcm.push.MessageSender;
 import org.whispersystems.textsecuregcm.push.ReceiptSender;
@@ -35,8 +37,10 @@ public class MessageControllerMetricsTest extends AbstractRedisClusterTest {
         mock(ReceiptSender.class),
         mock(AccountsManager.class),
         mock(MessagesManager.class),
+        mock(UnsealedSenderRateLimiter.class),
         mock(ApnFallbackManager.class),
         mock(DynamicConfigurationManager.class),
+        mock(RateLimitChallengeManager.class),
         getRedisCluster(),
         mock(ScheduledExecutorService.class));
   }

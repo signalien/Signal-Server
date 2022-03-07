@@ -45,6 +45,7 @@ public class GCMSender {
     put("receipt", metricRegistry.meter(name(getClass(), "outbound", "receipt")));
     put("notification", metricRegistry.meter(name(getClass(), "outbound", "notification")));
     put("challenge", metricRegistry.meter(name(getClass(), "outbound", "challenge")));
+    put("rateLimitChallenge", metricRegistry.meter(name(getClass(), "outbound", "rateLimitChallenge")));
   }};
 
   private final AccountsManager   accountsManager;
@@ -72,9 +73,10 @@ public class GCMSender {
     String key;
 
     switch (message.getType()) {
-      case NOTIFICATION: key = "notification"; break;
-      case CHALLENGE:    key = "challenge";    break;
-      default:           throw new AssertionError();
+      case NOTIFICATION:         key = "notification";       break;
+      case CHALLENGE:            key = "challenge";          break;
+      case RATE_LIMIT_CHALLENGE: key = "rateLimitChallenge"; break;
+      default:                   throw new AssertionError();
     }
 
     Message request = builder.withDataPart(key, message.getData().orElse("")).build();

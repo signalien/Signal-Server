@@ -43,7 +43,6 @@ import org.whispersystems.textsecuregcm.configuration.ZkConfig;
 import org.whispersystems.websocket.configuration.WebSocketConfiguration;
 
 import javax.validation.Valid;
-import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -152,6 +151,11 @@ public class WhisperServerConfiguration extends Configuration {
   @NotNull
   @JsonProperty
   private DynamoDbConfiguration migrationRetryAccountsDynamoDb;
+
+  @Valid
+  @NotNull
+  @JsonProperty
+  private DynamoDbConfiguration pushChallengeDynamoDb;
 
   @Valid
   @NotNull
@@ -441,6 +445,10 @@ public class WhisperServerConfiguration extends Configuration {
 
   public AppConfigConfiguration getAppConfig() {
     return appConfig;
+  }
+
+  public DynamoDbConfiguration getPushChallengeDynamoDbConfiguration() {
+    return pushChallengeDynamoDb;
   }
 
   public TorExitNodeConfiguration getTorExitNodeConfiguration() {

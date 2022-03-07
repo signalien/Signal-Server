@@ -19,6 +19,7 @@ import org.whispersystems.textsecuregcm.util.Constants;
 import org.whispersystems.textsecuregcm.util.SystemMapper;
 
 import java.io.IOException;
+import java.time.Duration;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -63,6 +64,10 @@ public class RateLimiter {
 
   public void validate(String key) throws RateLimitExceededException {
     validate(key, 1);
+  }
+
+  public boolean hasAvailablePermits(final String key, final int permits) {
+    return getBucket(key).getTimeUntilSpaceAvailable(permits).equals(Duration.ZERO);
   }
 
   public void clear(String key) {
