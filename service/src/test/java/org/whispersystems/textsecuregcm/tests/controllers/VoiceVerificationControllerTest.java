@@ -125,7 +125,18 @@ public class VoiceVerificationControllerTest {
                  .post(null);
 
     assertThat(response.getStatus()).isEqualTo(400);
+
   }
 
+  @Test
+  public void testTwimlMalformedLocale() {
+    Response response =
+        resources.getJerseyTest()
+            .target("/v1/voice/description/123456")
+            .queryParam("l", "it IT ,")
+            .request()
+            .post(null);
 
+    assertThat(response.getStatus()).isEqualTo(400);
+  }
 }
