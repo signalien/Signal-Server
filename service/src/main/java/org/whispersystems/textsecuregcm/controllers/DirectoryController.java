@@ -21,7 +21,6 @@ import org.whispersystems.textsecuregcm.entities.ClientContacts;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.DirectoryManager;
-import org.whispersystems.textsecuregcm.util.Base64;
 import org.whispersystems.textsecuregcm.util.Constants;
 
 import javax.validation.Valid;
@@ -38,6 +37,7 @@ import javax.ws.rs.core.Response;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
@@ -151,6 +151,6 @@ public class DirectoryController {
   }
 
   private byte[] decodeToken(String encoded) throws IOException {
-    return Base64.decodeWithoutPadding(encoded.replace('-', '+').replace('_', '/'));
+    return Base64.getDecoder().decode(encoded.replace('-', '+').replace('_', '/'));
   }
 }
