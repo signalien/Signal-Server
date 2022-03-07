@@ -7,18 +7,14 @@ package org.whispersystems.textsecuregcm.securebackup;
 
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import org.apache.commons.lang3.RandomStringUtils;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.whispersystems.textsecuregcm.auth.ExternalServiceCredentialGenerator;
 import org.whispersystems.textsecuregcm.auth.ExternalServiceCredentials;
 import org.whispersystems.textsecuregcm.configuration.SecureBackupServiceConfiguration;
 
-import java.security.Security;
 import java.security.cert.CertificateException;
 import java.util.UUID;
 import java.util.concurrent.CompletionException;
@@ -45,11 +41,6 @@ public class SecureBackupClientTest {
 
   @Rule
   public WireMockRule wireMockRule = new WireMockRule(options().dynamicPort().dynamicHttpsPort());
-
-  @BeforeClass
-  public static void setupBeforeClass() {
-    Security.addProvider(new BouncyCastleProvider());
-  }
 
   @Before
   public void setUp() throws CertificateException {
@@ -85,11 +76,6 @@ public class SecureBackupClientTest {
   public void tearDown() throws InterruptedException {
     httpExecutor.shutdown();
     httpExecutor.awaitTermination(1, TimeUnit.SECONDS);
-  }
-
-  @AfterClass
-  public static void tearDownAfterClass() {
-    Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME);
   }
 
   @Test

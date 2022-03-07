@@ -44,7 +44,6 @@ import io.micrometer.core.instrument.distribution.DistributionStatisticConfig;
 import io.micrometer.wavefront.WavefrontConfig;
 import io.micrometer.wavefront.WavefrontMeterRegistry;
 import java.net.http.HttpClient;
-import java.security.Security;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -61,7 +60,6 @@ import java.util.concurrent.TimeUnit;
 import javax.servlet.DispatcherType;
 import javax.servlet.FilterRegistration;
 import javax.servlet.ServletRegistration;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.eclipse.jetty.servlets.CrossOriginFilter;
 import org.jdbi.v3.core.Jdbi;
 import org.signal.zkgroup.ServerSecretParams;
@@ -197,10 +195,6 @@ import org.whispersystems.websocket.WebSocketResourceProviderFactory;
 import org.whispersystems.websocket.setup.WebSocketEnvironment;
 
 public class WhisperServerService extends Application<WhisperServerConfiguration> {
-
-  static {
-    Security.addProvider(new BouncyCastleProvider());
-  }
 
   @Override
   public void initialize(Bootstrap<WhisperServerConfiguration> bootstrap) {
