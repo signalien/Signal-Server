@@ -27,7 +27,6 @@ import org.whispersystems.textsecuregcm.limits.RateLimiter;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.tests.util.AuthHelper;
-import org.whispersystems.textsecuregcm.util.Base64;
 import org.whispersystems.textsecuregcm.util.SystemMapper;
 
 import javax.ws.rs.core.Response;
@@ -42,6 +41,7 @@ import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.Security;
 import java.security.spec.InvalidKeySpecException;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -67,7 +67,7 @@ public class AttachmentControllerTest {
       final KeyPair           keyPair          = keyPairGenerator.generateKeyPair();
 
       RSA_PRIVATE_KEY_PEM = "-----BEGIN PRIVATE KEY-----\n" +
-          Base64.encodeBytes(keyPair.getPrivate().getEncoded()) + "\n" +
+          Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded()) + "\n" +
           "-----END PRIVATE KEY-----";
     } catch (NoSuchAlgorithmException e) {
       throw new AssertionError(e);
@@ -186,7 +186,7 @@ public class AttachmentControllerTest {
     assertThat(descriptor.getPolicy()).isNotBlank();
     assertThat(descriptor.getSignature()).isNotBlank();
 
-    assertThat(new String(Base64.decode(descriptor.getPolicy()))).contains("[\"content-length-range\", 1, 104857600]");
+    assertThat(new String(Base64.getDecoder().decode(descriptor.getPolicy()))).contains("[\"content-length-range\", 1, 104857600]");
   }
 
   @Test

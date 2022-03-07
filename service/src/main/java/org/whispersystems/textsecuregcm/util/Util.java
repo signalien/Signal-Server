@@ -41,10 +41,6 @@ public class Util {
     }
   }
 
-  public static String getEncodedContactToken(String number) {
-    return Base64.encodeBytesWithoutPadding(getContactToken(number));
-  }
-
   public static boolean isValidNumber(String number) {
     return number.matches("^\\+[0-9]+") && PhoneNumberUtil.getInstance().isPossibleNumber(number, null);
   }
