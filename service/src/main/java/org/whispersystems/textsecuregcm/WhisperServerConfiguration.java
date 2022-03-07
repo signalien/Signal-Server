@@ -43,6 +43,7 @@ import org.whispersystems.textsecuregcm.configuration.ZkConfig;
 import org.whispersystems.websocket.configuration.WebSocketConfiguration;
 
 import javax.validation.Valid;
+import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -51,6 +52,10 @@ import java.util.Map;
 
 /** @noinspection MismatchedQueryAndUpdateOfCollection, WeakerAccess */
 public class WhisperServerConfiguration extends Configuration {
+
+  @NotEmpty
+  @JsonProperty
+  private String environment;
 
   @NotNull
   @Valid
@@ -263,6 +268,10 @@ public class WhisperServerConfiguration extends Configuration {
   private DonationConfiguration donation;
 
   private Map<String, String> transparentDataIndex = new HashMap<>();
+
+  public String getEnvironment() {
+    return environment;
+  }
 
   public RecaptchaConfiguration getRecaptchaConfiguration() {
     return recaptcha;
