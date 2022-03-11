@@ -21,7 +21,7 @@ import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.whispersystems.textsecuregcm.configuration.TorExitNodeConfiguration;
+import org.whispersystems.textsecuregcm.configuration.MonitoredS3ObjectConfiguration;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -43,7 +43,7 @@ public class TorExitNodeManager implements Managed {
 
   public TorExitNodeManager(
       final ScheduledExecutorService scheduledExecutorService,
-      final TorExitNodeConfiguration configuration) {
+      final MonitoredS3ObjectConfiguration configuration) {
 
     this.exitListMonitor = new S3ObjectMonitor(
         configuration.getS3Region(),

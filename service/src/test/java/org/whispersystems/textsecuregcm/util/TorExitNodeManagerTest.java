@@ -6,7 +6,7 @@
 package org.whispersystems.textsecuregcm.util;
 
 import org.junit.Test;
-import org.whispersystems.textsecuregcm.configuration.TorExitNodeConfiguration;
+import org.whispersystems.textsecuregcm.configuration.MonitoredS3ObjectConfiguration;
 import org.whispersystems.textsecuregcm.redis.AbstractRedisClusterTest;
 
 import java.io.ByteArrayInputStream;
@@ -21,7 +21,7 @@ public class TorExitNodeManagerTest extends AbstractRedisClusterTest {
 
   @Test
   public void testIsTorExitNode() {
-    final TorExitNodeConfiguration configuration = new TorExitNodeConfiguration();
+    final MonitoredS3ObjectConfiguration configuration = new MonitoredS3ObjectConfiguration();
     configuration.setS3Region("ap-northeast-3");
 
     final TorExitNodeManager torExitNodeManager =

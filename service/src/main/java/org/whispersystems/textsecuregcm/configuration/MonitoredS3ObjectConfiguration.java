@@ -10,7 +10,7 @@ import com.google.common.annotations.VisibleForTesting;
 import javax.validation.constraints.NotBlank;
 import java.time.Duration;
 
-public class TorExitNodeConfiguration {
+public class MonitoredS3ObjectConfiguration {
 
   @JsonProperty
   @NotBlank

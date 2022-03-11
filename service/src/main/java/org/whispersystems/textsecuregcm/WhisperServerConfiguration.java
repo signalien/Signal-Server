@@ -24,6 +24,7 @@ import org.whispersystems.textsecuregcm.configuration.MaxDeviceConfiguration;
 import org.whispersystems.textsecuregcm.configuration.MessageCacheConfiguration;
 import org.whispersystems.textsecuregcm.configuration.MessageDynamoDbConfiguration;
 import org.whispersystems.textsecuregcm.configuration.MicrometerConfiguration;
+import org.whispersystems.textsecuregcm.configuration.MonitoredS3ObjectConfiguration;
 import org.whispersystems.textsecuregcm.configuration.PaymentsServiceConfiguration;
 import org.whispersystems.textsecuregcm.configuration.PushConfiguration;
 import org.whispersystems.textsecuregcm.configuration.RateLimitsConfiguration;
@@ -34,7 +35,6 @@ import org.whispersystems.textsecuregcm.configuration.RemoteConfigConfiguration;
 import org.whispersystems.textsecuregcm.configuration.SecureBackupServiceConfiguration;
 import org.whispersystems.textsecuregcm.configuration.SecureStorageServiceConfiguration;
 import org.whispersystems.textsecuregcm.configuration.TestDeviceConfiguration;
-import org.whispersystems.textsecuregcm.configuration.TorExitNodeConfiguration;
 import org.whispersystems.textsecuregcm.configuration.TurnConfiguration;
 import org.whispersystems.textsecuregcm.configuration.TwilioConfiguration;
 import org.whispersystems.textsecuregcm.configuration.UnidentifiedDeliveryConfiguration;
@@ -265,7 +265,12 @@ public class WhisperServerConfiguration extends Configuration {
   @Valid
   @NotNull
   @JsonProperty
-  private TorExitNodeConfiguration tor;
+  private MonitoredS3ObjectConfiguration torExitNodeList;
+
+  @Valid
+  @NotNull
+  @JsonProperty
+  private MonitoredS3ObjectConfiguration asnTable;
 
   @Valid
   @NotNull
@@ -460,8 +465,12 @@ public class WhisperServerConfiguration extends Configuration {
     return reportMessageDynamoDb;
   }
 
-  public TorExitNodeConfiguration getTorExitNodeConfiguration() {
-    return tor;
+  public MonitoredS3ObjectConfiguration getTorExitNodeListConfiguration() {
+    return torExitNodeList;
+  }
+
+  public MonitoredS3ObjectConfiguration getAsnTableConfiguration() {
+    return asnTable;
   }
 
   public DonationConfiguration getDonationConfiguration() {
