@@ -79,7 +79,7 @@ public class PushChallengeManager {
       }
     } else {
       sent = false;
-      platform = null;
+      platform = "unrecognized";
     }
 
     Metrics.counter(CHALLENGE_REQUESTED_COUNTER_NAME,
