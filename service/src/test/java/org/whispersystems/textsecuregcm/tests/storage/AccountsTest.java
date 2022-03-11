@@ -65,9 +65,16 @@ public class AccountsTest {
     Device  device  = generateDevice (1                                            );
     Account account = generateAccount("+14151112222", UUID.randomUUID(), Collections.singleton(device));
 
-    accounts.create(account);
+    boolean freshUser = accounts.create(account);
+    assertThat(freshUser).isTrue();
 
     PreparedStatement statement = db.getTestDatabase().getConnection().prepareStatement("SELECT * FROM accounts WHERE number = ?");
+    verifyStoredState(statement, "+14151112222", account.getUuid(), account);
+
+    freshUser = accounts.create(account);
+    assertThat(freshUser).isTrue();
+
+    statement = db.getTestDatabase().getConnection().prepareStatement("SELECT * FROM accounts WHERE number = ?");
     verifyStoredState(statement, "+14151112222", account.getUuid(), account);
   }
 
@@ -139,7 +146,8 @@ public class AccountsTest {
     device = generateDevice(1);
     account = generateAccount("+14151112222", secondUuid, Collections.singleton(device));
 
-    accounts.create(account);
+    final boolean freshUser = accounts.create(account);
+    assertThat(freshUser).isFalse();
     verifyStoredState(statement, "+14151112222", firstUuid, account);
 
     device = generateDevice(1);
@@ -222,7 +230,9 @@ public class AccountsTest {
       final Account recreatedAccount = generateAccount(deletedAccount.getNumber(), UUID.randomUUID(),
           Collections.singleton(generateDevice(1)));
 
-      accounts.create(recreatedAccount);
+      final boolean freshUser = accounts.create(recreatedAccount);
+
+      assertThat(freshUser).isTrue();
 
       assertThat(accounts.get(recreatedAccount.getUuid())).isPresent();
       verifyStoredState(recreatedAccount.getNumber(), recreatedAccount.getUuid(),
@@ -304,7 +314,6 @@ public class AccountsTest {
 
   }
 
-
   private Device generateDevice(long id) {
     Random       random       = new Random(System.currentTimeMillis());
     SignedPreKey signedPreKey = new SignedPreKey(random.nextInt(), "testPublicKey-" + random.nextInt(), "testSignature-" + random.nextInt());
@@ -366,8 +375,5 @@ public class AccountsTest {
       assertThat(resultDevice.getCreated()).isEqualTo(expectingDevice.getCreated());
     }
   }
-
-
-
 
 }
