@@ -25,6 +25,9 @@ public class TorExitNodeConfiguration {
   private String objectKey;
 
   @JsonProperty
+  private long maxSize = 16 * 1024 * 1024;
+
+  @JsonProperty
   private Duration refreshInterval = Duration.ofMinutes(5);
 
   public String getS3Region() {
@@ -42,6 +45,15 @@ public class TorExitNodeConfiguration {
 
   public String getObjectKey() {
     return objectKey;
+  }
+
+  public long getMaxSize() {
+    return maxSize;
+  }
+
+  @VisibleForTesting
+  public void setMaxSize(final long maxSize) {
+    this.maxSize = maxSize;
   }
 
   public Duration getRefreshInterval() {
