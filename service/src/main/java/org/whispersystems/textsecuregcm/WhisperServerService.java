@@ -250,32 +250,32 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
       throws Exception {
     SharedMetricRegistries.add(Constants.METRICS_NAME, environment.metrics());
 
-    final WavefrontConfig wavefrontConfig = new WavefrontConfig() {
-      @Override
-      public String get(final String key) {
-        return null;
-      }
-
-      @Override
-      public String uri() {
-        return config.getMicrometerConfiguration().getUri();
-      }
-
-      @Override
-      public int batchSize() {
-        return config.getMicrometerConfiguration().getBatchSize();
-      }
-    };
-
-    Metrics.addRegistry(new WavefrontMeterRegistry(wavefrontConfig, Clock.SYSTEM) {
-      @Override
-      protected DistributionStatisticConfig defaultHistogramConfig() {
-        return DistributionStatisticConfig.builder()
-                .percentiles(.75, .95, .99, .999)
-                .build()
-                .merge(super.defaultHistogramConfig());
-      }
-    });
+//    final WavefrontConfig wavefrontConfig = new WavefrontConfig() {
+//      @Override
+//      public String get(final String key) {
+//        return null;
+//      }
+//
+//      @Override
+//      public String uri() {
+//        return config.getMicrometerConfiguration().getUri();
+//      }
+//
+//      @Override
+//      public int batchSize() {
+//        return config.getMicrometerConfiguration().getBatchSize();
+//      }
+//    };
+//
+//    Metrics.addRegistry(new WavefrontMeterRegistry(wavefrontConfig, Clock.SYSTEM) {
+//      @Override
+//      protected DistributionStatisticConfig defaultHistogramConfig() {
+//        return DistributionStatisticConfig.builder()
+//                .percentiles(.75, .95, .99, .999)
+//                .build()
+//                .merge(super.defaultHistogramConfig());
+//      }
+//    });
 
     environment.getObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     environment.getObjectMapper().setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE);
@@ -414,7 +414,6 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     ExecutorService          gcmSenderExecutor                    = environment.lifecycle().executorService(name(getClass(), "gcmSender-%d")).maxThreads(1).minThreads(1).build();
     ExecutorService          backupServiceExecutor                = environment.lifecycle().executorService(name(getClass(), "backupService-%d")).maxThreads(1).minThreads(1).build();
     ExecutorService          storageServiceExecutor               = environment.lifecycle().executorService(name(getClass(), "storageService-%d")).maxThreads(1).minThreads(1).build();
-    ExecutorService          torExitNodeExecutor                  = environment.lifecycle().executorService(name(getClass(), "torExitNode-%d")).maxThreads(1).minThreads(1).build();
     ExecutorService          donationExecutor                     = environment.lifecycle().executorService(name(getClass(), "donation-%d")).maxThreads(1).minThreads(1).build();
 
     ExternalServiceCredentialGenerator directoryCredentialsGenerator = new ExternalServiceCredentialGenerator(config.getDirectoryConfiguration().getDirectoryClientConfiguration().getUserAuthenticationTokenSharedSecret(),
@@ -455,7 +454,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     GCMSender                  gcmSender                  = new GCMSender(gcmSenderExecutor, accountsManager, config.getGcmConfiguration().getApiKey());
     RateLimiters               rateLimiters               = new RateLimiters(config.getLimitsConfiguration(), dynamicConfigurationManager, rateLimitersCluster);
     ProvisioningManager        provisioningManager        = new ProvisioningManager(pubSubManager);
-    TorExitNodeManager         torExitNodeManager         = new TorExitNodeManager(recurringJobExecutor, torExitNodeExecutor, config.getTorExitNodeConfiguration());
+//    TorExitNodeManager         torExitNodeManager         = new TorExitNodeManager(recurringJobExecutor, config.getTorExitNodeConfiguration());
 
     AccountAuthenticator                  accountAuthenticator                  = new AccountAuthenticator(accountsManager);
     DisabledPermittedAccountAuthenticator disabledPermittedAccountAuthenticator = new DisabledPermittedAccountAuthenticator(accountsManager);
@@ -489,10 +488,10 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     accountDatabaseCrawlerListeners.add(new RegistrationLockVersionCounter(metricsCluster, config.getMetricsFactory()));
     accountDatabaseCrawlerListeners.add(new AccountsDynamoDbMigrator(accountsDynamoDb, dynamicConfigurationManager));
 
-    HttpClient                currencyClient  = HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).connectTimeout(Duration.ofSeconds(10)).build();
-    FixerClient               fixerClient     = new FixerClient(currencyClient, config.getPaymentsServiceConfiguration().getFixerApiKey());
-    FtxClient                 ftxClient       = new FtxClient(currencyClient);
-    CurrencyConversionManager currencyManager = new CurrencyConversionManager(fixerClient, ftxClient, config.getPaymentsServiceConfiguration().getPaymentCurrencies());
+//    HttpClient                currencyClient  = HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).connectTimeout(Duration.ofSeconds(10)).build();
+//    FixerClient               fixerClient     = new FixerClient(currencyClient, config.getPaymentsServiceConfiguration().getFixerApiKey());
+//    FtxClient                 ftxClient       = new FtxClient(currencyClient);
+//    CurrencyConversionManager currencyManager = new CurrencyConversionManager(fixerClient, ftxClient, config.getPaymentsServiceConfiguration().getPaymentCurrencies());
 
     AccountDatabaseCrawlerCache accountDatabaseCrawlerCache = new AccountDatabaseCrawlerCache(cacheCluster);
     AccountDatabaseCrawler      accountDatabaseCrawler      = new AccountDatabaseCrawler(accountsManager, accountDatabaseCrawlerCache, accountDatabaseCrawlerListeners, config.getAccountDatabaseCrawlerConfiguration().getChunkSize(), config.getAccountDatabaseCrawlerConfiguration().getChunkIntervalMs());
@@ -506,8 +505,8 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     environment.lifecycle().manage(messagesCache);
     environment.lifecycle().manage(messagePersister);
     environment.lifecycle().manage(clientPresenceManager);
-    environment.lifecycle().manage(currencyManager);
-    environment.lifecycle().manage(torExitNodeManager);
+//    environment.lifecycle().manage(currencyManager);
+//    environment.lifecycle().manage(torExitNodeManager);
 
     AWSCredentials         credentials               = new BasicAWSCredentials(config.getCdnConfiguration().getAccessKey(), config.getCdnConfiguration().getAccessSecret());
     AWSCredentialsProvider credentialsProvider       = new AWSStaticCredentialsProvider(credentials);
@@ -534,8 +533,8 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     AuthFilter<BasicCredentials, Account>                  accountAuthFilter                  = new BasicCredentialAuthFilter.Builder<Account>().setAuthenticator(accountAuthenticator).buildAuthFilter                                  ();
     AuthFilter<BasicCredentials, DisabledPermittedAccount> disabledPermittedAccountAuthFilter = new BasicCredentialAuthFilter.Builder<DisabledPermittedAccount>().setAuthenticator(disabledPermittedAccountAuthenticator).buildAuthFilter();
 
-    environment.servlets().addFilter("RemoteDeprecationFilter", new RemoteDeprecationFilter(dynamicConfigurationManager))
-        .addMappingForUrlPatterns(EnumSet.of(DispatcherType.REQUEST), false, "/*");
+//    environment.servlets().addFilter("RemoteDeprecationFilter", new RemoteDeprecationFilter(dynamicConfigurationManager))
+//        .addMappingForUrlPatterns(EnumSet.of(DispatcherType.REQUEST), false, "/*");
 
     environment.jersey().register(MultiRecipientMessageProvider.class);
     environment.jersey().register(new MetricsApplicationEventListener(TrafficSource.HTTP));
@@ -551,7 +550,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     environment.jersey().register(new VoiceVerificationController(config.getVoiceVerificationConfiguration().getUrl(), config.getVoiceVerificationConfiguration().getLocales()));
     environment.jersey().register(new SecureStorageController(storageCredentialsGenerator));
     environment.jersey().register(new SecureBackupController(backupCredentialsGenerator));
-    environment.jersey().register(new PaymentsController(currencyManager, paymentsCredentialsGenerator));
+//    environment.jersey().register(new PaymentsController(currencyManager, paymentsCredentialsGenerator));
     environment.jersey().register(attachmentControllerV1);
     environment.jersey().register(attachmentControllerV2);
     environment.jersey().register(attachmentControllerV3);
@@ -623,7 +622,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     BufferPoolGauges.registerMetrics();
     GarbageCollectionGauges.registerMetrics();
 
-    new NstatCounters().registerMetrics(recurringJobExecutor, wavefrontConfig.step());
+//    new NstatCounters().registerMetrics(recurringJobExecutor, wavefrontConfig.step());
   }
 
   private void registerExceptionMappers(Environment environment, WebSocketEnvironment<Account> webSocketEnvironment, WebSocketEnvironment<Account> provisioningEnvironment) {

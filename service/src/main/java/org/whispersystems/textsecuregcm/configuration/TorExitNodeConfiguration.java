@@ -7,7 +7,6 @@ package org.whispersystems.textsecuregcm.configuration;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.annotations.VisibleForTesting;
-import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
 import java.time.Duration;
 
@@ -15,37 +14,37 @@ public class TorExitNodeConfiguration {
 
   @JsonProperty
   @NotBlank
-  private String listUrl;
+  private String s3Region;
+
+  @JsonProperty
+  @NotBlank
+  private String s3Bucket;
+
+  @JsonProperty
+  @NotBlank
+  private String objectKey;
 
   @JsonProperty
   private Duration refreshInterval = Duration.ofMinutes(5);
 
-  @JsonProperty
-  @Valid
-  private CircuitBreakerConfiguration circuitBreakerConfiguration = new CircuitBreakerConfiguration();
-
-  @JsonProperty
-  @Valid
-  private RetryConfiguration retryConfiguration = new RetryConfiguration();
-
-  public String getListUrl() {
-    return listUrl;
+  public String getS3Region() {
+    return s3Region;
   }
 
   @VisibleForTesting
-  public void setListUrl(final String listUrl) {
-    this.listUrl = listUrl;
+  public void setS3Region(final String s3Region) {
+    this.s3Region = s3Region;
+  }
+
+  public String getS3Bucket() {
+    return s3Bucket;
+  }
+
+  public String getObjectKey() {
+    return objectKey;
   }
 
   public Duration getRefreshInterval() {
     return refreshInterval;
-  }
-
-  public CircuitBreakerConfiguration getCircuitBreakerConfiguration() {
-    return circuitBreakerConfiguration;
-  }
-
-  public RetryConfiguration getRetryConfiguration() {
-    return retryConfiguration;
   }
 }
