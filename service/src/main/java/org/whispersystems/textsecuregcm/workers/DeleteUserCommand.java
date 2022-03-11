@@ -25,6 +25,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import io.micrometer.core.instrument.Metrics;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import org.jdbi.v3.core.Jdbi;
@@ -58,6 +59,8 @@ import org.whispersystems.textsecuregcm.storage.MigrationDeletedAccounts;
 import org.whispersystems.textsecuregcm.storage.MigrationRetryAccounts;
 import org.whispersystems.textsecuregcm.storage.Profiles;
 import org.whispersystems.textsecuregcm.storage.ProfilesManager;
+import org.whispersystems.textsecuregcm.storage.ReportMessageDynamoDb;
+import org.whispersystems.textsecuregcm.storage.ReportMessageManager;
 import org.whispersystems.textsecuregcm.storage.ReservedUsernames;
 import org.whispersystems.textsecuregcm.storage.Usernames;
 import org.whispersystems.textsecuregcm.storage.UsernamesManager;
@@ -150,8 +153,16 @@ public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfigura
               .withRequestTimeout((int) configuration.getMigrationRetryAccountsDynamoDbConfiguration().getClientRequestTimeout().toMillis()))
           .withCredentials(InstanceProfileCredentialsProvider.getInstance());
 
+      AmazonDynamoDBClientBuilder reportMessageDynamoDbClientBuilder = AmazonDynamoDBClientBuilder
+          .standard()
+          .withRegion(configuration.getReportMessageDynamoDbConfiguration().getRegion())
+          .withClientConfiguration(new ClientConfiguration().withClientExecutionTimeout(((int) configuration.getReportMessageDynamoDbConfiguration().getClientExecutionTimeout().toMillis()))
+              .withRequestTimeout((int) configuration.getReportMessageDynamoDbConfiguration().getClientRequestTimeout().toMillis()))
+          .withCredentials(InstanceProfileCredentialsProvider.getInstance());
+
       DynamoDB messageDynamoDb = Constants.DYNAMO_DB ? new DynamoDB(clientBuilder.build()) : null;
       DynamoDB preKeysDynamoDb = Constants.DYNAMO_DB ? new DynamoDB(keysDynamoDbClientBuilder.build()) : null;
+      DynamoDB reportMessagesDynamoDb = Constants.DYNAMO_DB ? new DynamoDB(reportMessageDynamoDbClientBuilder.build()) : null;
 
       AmazonDynamoDB accountsDynamoDbClient = Constants.DYNAMO_DB ? accountsDynamoDbClientBuilder.build() : null;
       AmazonDynamoDBAsync accountsDynamoDbAsyncClient = Constants.DYNAMO_DB ? accountsDynamoDbAsyncClientBuilder.build() : null;
@@ -197,7 +208,9 @@ public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfigura
       DirectoryManager          directory            = new DirectoryManager(redisClient);
       UsernamesManager          usernamesManager     = new UsernamesManager(usernames, reservedUsernames, cacheCluster);
       ProfilesManager           profilesManager      = new ProfilesManager(profiles, cacheCluster);
-      MessagesManager           messagesManager      = new MessagesManager(messages, messagesDynamoDb, messagesCache, pushLatencyManager);
+      ReportMessageDynamoDb     reportMessageDynamoDb = Constants.DYNAMO_DB ? new ReportMessageDynamoDb(reportMessagesDynamoDb, configuration.getReportMessageDynamoDbConfiguration().getTableName()) : null;
+      ReportMessageManager      reportMessageManager = new ReportMessageManager(reportMessageDynamoDb, Metrics.globalRegistry);
+      MessagesManager           messagesManager      = new MessagesManager(messages, messagesDynamoDb, messagesCache, pushLatencyManager, reportMessageManager);
       AccountsManager           accountsManager      = new AccountsManager(accounts, accountsDynamoDb, directory, cacheCluster, directoryQueue, keys, keysDynamoDb, messagesManager, usernamesManager, profilesManager, secureStorageClient, secureBackupClient, experimentEnrollmentManager, dynamicConfigurationManager);
 
       for (String user: users) {

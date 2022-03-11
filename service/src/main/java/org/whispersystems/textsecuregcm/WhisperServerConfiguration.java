@@ -160,6 +160,11 @@ public class WhisperServerConfiguration extends Configuration {
   @Valid
   @NotNull
   @JsonProperty
+  private DynamoDbConfiguration reportMessageDynamoDb;
+
+  @Valid
+  @NotNull
+  @JsonProperty
   private DatabaseConfiguration messageStore;
 
   @Valid
@@ -449,6 +454,10 @@ public class WhisperServerConfiguration extends Configuration {
 
   public DynamoDbConfiguration getPushChallengeDynamoDbConfiguration() {
     return pushChallengeDynamoDb;
+  }
+
+  public DynamoDbConfiguration getReportMessageDynamoDbConfiguration() {
+    return reportMessageDynamoDb;
   }
 
   public TorExitNodeConfiguration getTorExitNodeConfiguration() {

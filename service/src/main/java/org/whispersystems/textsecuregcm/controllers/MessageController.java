@@ -43,6 +43,7 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
+import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -89,6 +90,7 @@ import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
+import org.whispersystems.textsecuregcm.storage.ReportMessageManager;
 import org.whispersystems.textsecuregcm.util.Constants;
 import org.whispersystems.textsecuregcm.util.ForwardedIpUtil;
 import org.whispersystems.textsecuregcm.util.Util;
@@ -118,6 +120,7 @@ public class MessageController {
   private final ApnFallbackManager          apnFallbackManager;
   private final DynamicConfigurationManager dynamicConfigurationManager;
   private final RateLimitChallengeManager   rateLimitChallengeManager;
+  private final ReportMessageManager        reportMessageManager;
   private final ScheduledExecutorService    receiptExecutorService;
 
   private final Random random = new Random();
@@ -147,6 +150,7 @@ public class MessageController {
       ApnFallbackManager apnFallbackManager,
       DynamicConfigurationManager dynamicConfigurationManager,
       RateLimitChallengeManager rateLimitChallengeManager,
+      ReportMessageManager reportMessageManager,
       FaultTolerantRedisCluster metricsCluster,
       ScheduledExecutorService receiptExecutorService)
   {
@@ -159,6 +163,7 @@ public class MessageController {
     this.apnFallbackManager          = apnFallbackManager;
     this.dynamicConfigurationManager = dynamicConfigurationManager;
     this.rateLimitChallengeManager   = rateLimitChallengeManager;
+    this.reportMessageManager        = reportMessageManager;
     this.receiptExecutorService      = receiptExecutorService;
 
     try {
@@ -544,6 +549,17 @@ public class MessageController {
     } catch (NoSuchUserException e) {
       logger.warn("Sending delivery receipt", e);
     }
+  }
+
+  @Timed
+  @POST
+  @Path("/report/{sourceNumber}/{messageGuid}")
+  public Response reportMessage(@Auth Account account, @PathParam("sourceNumber") String sourceNumber, @PathParam("messageGuid") UUID messageGuid) {
+
+    reportMessageManager.report(sourceNumber, messageGuid);
+
+    return Response.status(Status.ACCEPTED)
+        .build();
   }
 
   private void sendMessage(Optional<Account> source,
