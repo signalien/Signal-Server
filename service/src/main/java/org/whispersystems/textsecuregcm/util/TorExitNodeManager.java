@@ -57,7 +57,12 @@ public class TorExitNodeManager implements Managed {
 
   @Override
   public synchronized void start() {
-    exitListMonitor.refresh();
+    try {
+      handleExitListChanged(exitListMonitor.getObject());
+    } catch (final Exception e) {
+      log.warn("Failed to load initial Tor exit node list", e);
+    }
+
     exitListMonitor.start();
   }
 
