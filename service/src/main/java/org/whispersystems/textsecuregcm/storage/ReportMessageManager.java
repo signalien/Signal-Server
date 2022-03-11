@@ -13,10 +13,12 @@ import org.slf4j.LoggerFactory;
 import org.whispersystems.textsecuregcm.util.UUIDUtil;
 import org.whispersystems.textsecuregcm.util.Util;
 
+import static com.codahale.metrics.MetricRegistry.name;
+
 public class ReportMessageManager {
 
   @VisibleForTesting
-  static final String REPORT_COUNTER_NAME = "reported";
+  static final String REPORT_COUNTER_NAME = name(ReportMessageManager.class, "reported");
 
   private final ReportMessageDynamoDb reportMessageDynamoDb;
   private final MeterRegistry meterRegistry;
