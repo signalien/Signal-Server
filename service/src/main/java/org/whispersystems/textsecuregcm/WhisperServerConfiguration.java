@@ -14,6 +14,7 @@ import org.whispersystems.textsecuregcm.configuration.AppConfigConfiguration;
 import org.whispersystems.textsecuregcm.configuration.AwsAttachmentsConfiguration;
 import org.whispersystems.textsecuregcm.configuration.CdnConfiguration;
 import org.whispersystems.textsecuregcm.configuration.DatabaseConfiguration;
+import org.whispersystems.textsecuregcm.configuration.DatadogConfiguration;
 import org.whispersystems.textsecuregcm.configuration.DirectoryConfiguration;
 import org.whispersystems.textsecuregcm.configuration.DonationConfiguration;
 import org.whispersystems.textsecuregcm.configuration.DynamoDbConfiguration;
@@ -23,7 +24,6 @@ import org.whispersystems.textsecuregcm.configuration.AccountsDatabaseConfigurat
 import org.whispersystems.textsecuregcm.configuration.MaxDeviceConfiguration;
 import org.whispersystems.textsecuregcm.configuration.MessageCacheConfiguration;
 import org.whispersystems.textsecuregcm.configuration.MessageDynamoDbConfiguration;
-import org.whispersystems.textsecuregcm.configuration.MicrometerConfiguration;
 import org.whispersystems.textsecuregcm.configuration.MonitoredS3ObjectConfiguration;
 import org.whispersystems.textsecuregcm.configuration.PaymentsServiceConfiguration;
 import org.whispersystems.textsecuregcm.configuration.PushConfiguration;
@@ -39,6 +39,7 @@ import org.whispersystems.textsecuregcm.configuration.TurnConfiguration;
 import org.whispersystems.textsecuregcm.configuration.TwilioConfiguration;
 import org.whispersystems.textsecuregcm.configuration.UnidentifiedDeliveryConfiguration;
 import org.whispersystems.textsecuregcm.configuration.VoiceVerificationConfiguration;
+import org.whispersystems.textsecuregcm.configuration.WavefrontConfiguration;
 import org.whispersystems.textsecuregcm.configuration.ZkConfig;
 import org.whispersystems.websocket.configuration.WebSocketConfiguration;
 
@@ -80,7 +81,12 @@ public class WhisperServerConfiguration extends Configuration {
   @NotNull
   @Valid
   @JsonProperty
-  private MicrometerConfiguration micrometer;
+  private WavefrontConfiguration wavefront;
+
+  @NotNull
+  @Valid
+  @JsonProperty
+  private DatadogConfiguration datadog;
 
   @NotNull
   @Valid
@@ -403,8 +409,12 @@ public class WhisperServerConfiguration extends Configuration {
     return cdn;
   }
 
-  public MicrometerConfiguration getMicrometerConfiguration() {
-    return micrometer;
+  public WavefrontConfiguration getWavefrontConfiguration() {
+    return wavefront;
+  }
+
+  public DatadogConfiguration getDatadogConfiguration() {
+    return datadog;
   }
 
   public UnidentifiedDeliveryConfiguration getDeliveryCertificate() {
