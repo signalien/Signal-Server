@@ -41,15 +41,12 @@ import io.micrometer.datadog.DatadogConfig;
 import io.micrometer.datadog.DatadogMeterRegistry;
 import io.micrometer.wavefront.WavefrontConfig;
 import io.micrometer.wavefront.WavefrontMeterRegistry;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -197,6 +194,7 @@ import org.whispersystems.textsecuregcm.storage.UsernamesManager;
 import org.whispersystems.textsecuregcm.util.AsnManager;
 import org.whispersystems.textsecuregcm.util.Constants;
 import org.whispersystems.textsecuregcm.util.DynamoDbFromConfig;
+import org.whispersystems.textsecuregcm.util.HostnameUtil;
 import org.whispersystems.textsecuregcm.util.TorExitNodeManager;
 import org.whispersystems.textsecuregcm.websocket.AuthenticatedConnectListener;
 import org.whispersystems.textsecuregcm.websocket.DeadLetterHandler;
@@ -290,21 +288,6 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
 //    });
 //
 //    {
-//      final String hostname;
-//
-//      {
-//        String localHostName = "unknown";
-//
-//        try {
-//          localHostName = InetAddress.getLocalHost().getHostName().toLowerCase(Locale.US);
-//          log.info("Setting host tag to {}", localHostName);
-//        } catch (final UnknownHostException e) {
-//          log.warn("Failed to get hostname", e);
-//        }
-//
-//        hostname = localHostName;
-//      }
-//
 //      final DatadogMeterRegistry datadogMeterRegistry = new DatadogMeterRegistry(new DatadogConfig() {
 //        @Override
 //        public String get(final String key) {
@@ -330,7 +313,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
 //      datadogMeterRegistry.config().commonTags(
 //              Tags.of(
 //                  "service", "chat",
-//                  "host", hostname,
+//                  "host", HostnameUtil.getLocalHostname(),
 //                  "version", WhisperServerVersion.getServerVersion(),
 //                  "env", config.getDatadogConfiguration().getEnvironment()))
 //          .meterFilter(MeterFilter.denyNameStartsWith(MetricsRequestEventListener.REQUEST_COUNTER_NAME))
