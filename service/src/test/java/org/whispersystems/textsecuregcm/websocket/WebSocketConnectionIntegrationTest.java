@@ -91,7 +91,7 @@ public class WebSocketConnectionIntegrationTest extends AbstractRedisClusterTest
         executorService = Executors.newSingleThreadExecutor();
         messages = new Messages(new FaultTolerantDatabase("messages-test", Jdbi.create(db.getTestDatabase()), new CircuitBreakerConfiguration()));
         messagesCache = new MessagesCache(getRedisCluster(), getRedisCluster(), executorService);
-        messagesDynamoDb = new MessagesDynamoDb(messagesDynamoDbRule.getDynamoDB(), MessagesDynamoDbRule.TABLE_NAME, Duration.ofDays(7));
+        messagesDynamoDb = new MessagesDynamoDb(messagesDynamoDbRule.getDynamoDbClient(), MessagesDynamoDbRule.TABLE_NAME, Duration.ofDays(7));
         reportMessageManager = mock(ReportMessageManager.class);
         account = mock(Account.class);
         device = mock(Device.class);
