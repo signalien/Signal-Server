@@ -122,7 +122,6 @@ import org.whispersystems.textsecuregcm.metrics.MetricsApplicationEventListener;
 import org.whispersystems.textsecuregcm.metrics.MetricsRequestEventListener;
 import org.whispersystems.textsecuregcm.metrics.NetworkReceivedGauge;
 import org.whispersystems.textsecuregcm.metrics.NetworkSentGauge;
-import org.whispersystems.textsecuregcm.metrics.NstatCounters;
 import org.whispersystems.textsecuregcm.metrics.OperatingSystemMemoryGauge;
 import org.whispersystems.textsecuregcm.metrics.PushLatencyManager;
 import org.whispersystems.textsecuregcm.metrics.TrafficSource;
@@ -637,8 +636,6 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
 
     BufferPoolGauges.registerMetrics();
     GarbageCollectionGauges.registerMetrics();
-
-//    new NstatCounters().registerMetrics(recurringJobExecutor, wavefrontConfig.step());
   }
 
   private void registerExceptionMappers(Environment environment, WebSocketEnvironment<Account> webSocketEnvironment, WebSocketEnvironment<Account> provisioningEnvironment) {
