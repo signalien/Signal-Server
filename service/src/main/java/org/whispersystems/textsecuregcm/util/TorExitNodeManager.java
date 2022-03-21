@@ -21,8 +21,6 @@ import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.textsecuregcm.configuration.MonitoredS3ObjectConfiguration;
-import software.amazon.awssdk.core.ResponseInputStream;
-import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -70,7 +68,7 @@ public class TorExitNodeManager implements Managed {
     return exitNodeAddresses.get().contains(address);
   }
 
-  private void handleExitListChanged(final ResponseInputStream<GetObjectResponse> exitList) {
+  private void handleExitListChanged(final InputStream exitList) {
     REFRESH_TIMER.record(() -> handleExitListChanged(exitList));
   }
 

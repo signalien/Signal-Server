@@ -11,6 +11,7 @@ import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.UUID;
@@ -33,7 +34,7 @@ class S3ObjectMonitorTest {
     final String objectKey = "greatest-smooth-jazz-hits-of-all-time.zip";
 
     //noinspection unchecked
-    final Consumer<ResponseInputStream<GetObjectResponse>> listener = mock(Consumer.class);
+    final Consumer<InputStream> listener = mock(Consumer.class);
 
     final S3ObjectMonitor objectMonitor = new S3ObjectMonitor(
         s3Client,
@@ -64,7 +65,7 @@ class S3ObjectMonitorTest {
     final String objectKey = "greatest-smooth-jazz-hits-of-all-time.zip";
 
     //noinspection unchecked
-    final Consumer<ResponseInputStream<GetObjectResponse>> listener = mock(Consumer.class);
+    final Consumer<InputStream> listener = mock(Consumer.class);
 
     final S3ObjectMonitor objectMonitor = new S3ObjectMonitor(
         s3Client,
@@ -102,7 +103,7 @@ class S3ObjectMonitorTest {
     final long maxObjectSize = 16 * 1024 * 1024;
 
     //noinspection unchecked
-    final Consumer<ResponseInputStream<GetObjectResponse>> listener = mock(Consumer.class);
+    final Consumer<InputStream> listener = mock(Consumer.class);
 
     final S3ObjectMonitor objectMonitor = new S3ObjectMonitor(
         s3Client,
