@@ -32,7 +32,10 @@ import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import io.lettuce.core.resource.ClientResources;
 import io.micrometer.core.instrument.Clock;
+import io.micrometer.core.instrument.Meter.Id;
 import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.core.instrument.distribution.DistributionStatisticConfig;
 import io.micrometer.datadog.DatadogConfig;
 import io.micrometer.datadog.DatadogMeterRegistry;
@@ -116,6 +119,7 @@ import org.whispersystems.textsecuregcm.metrics.FreeMemoryGauge;
 import org.whispersystems.textsecuregcm.metrics.GarbageCollectionGauges;
 import org.whispersystems.textsecuregcm.metrics.MaxFileDescriptorGauge;
 import org.whispersystems.textsecuregcm.metrics.MetricsApplicationEventListener;
+import org.whispersystems.textsecuregcm.metrics.MetricsRequestEventListener;
 import org.whispersystems.textsecuregcm.metrics.NetworkReceivedGauge;
 import org.whispersystems.textsecuregcm.metrics.NetworkSentGauge;
 import org.whispersystems.textsecuregcm.metrics.NstatCounters;
@@ -249,8 +253,13 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
   @Override
   public void run(WhisperServerConfiguration config, Environment environment)
       throws Exception {
+
     SharedMetricRegistries.add(Constants.METRICS_NAME, environment.metrics());
 
+//    final DistributionStatisticConfig defaultDistributionStatisticConfig = DistributionStatisticConfig.builder()
+//        .percentiles(.75, .95, .99, .999)
+//        .build();
+//
 //    final WavefrontConfig wavefrontConfig = new WavefrontConfig() {
 //      @Override
 //      public String get(final String key) {
@@ -271,13 +280,10 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
 //    Metrics.addRegistry(new WavefrontMeterRegistry(wavefrontConfig, Clock.SYSTEM) {
 //      @Override
 //      protected DistributionStatisticConfig defaultHistogramConfig() {
-//        return DistributionStatisticConfig.builder()
-//                .percentiles(.75, .95, .99, .999)
-//                .build()
-//                .merge(super.defaultHistogramConfig());
+//        return defaultDistributionStatisticConfig.merge(super.defaultHistogramConfig());
 //      }
 //    });
-
+//
 //    {
 //      final String host;
 //
@@ -313,6 +319,22 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
 //          return host;
 //        }
 //      }, Clock.SYSTEM);
+//
+//      datadogMeterRegistry.config().commonTags(
+//              Tags.of(
+//                  "service", "chat",
+//                  "version", WhisperServerVersion.getServerVersion(),
+//                  "env", config.getDatadogConfiguration().getEnvironment()))
+//          .meterFilter(MeterFilter.denyNameStartsWith(MetricsRequestEventListener.REQUEST_COUNTER_NAME))
+//          .meterFilter(MeterFilter.denyNameStartsWith(MetricsRequestEventListener.ANDROID_REQUEST_COUNTER_NAME))
+//          .meterFilter(MeterFilter.denyNameStartsWith(MetricsRequestEventListener.DESKTOP_REQUEST_COUNTER_NAME))
+//          .meterFilter(MeterFilter.denyNameStartsWith(MetricsRequestEventListener.IOS_REQUEST_COUNTER_NAME))
+//          .meterFilter(new MeterFilter() {
+//            @Override
+//            public DistributionStatisticConfig configure(final Id id, final DistributionStatisticConfig config) {
+//              return defaultDistributionStatisticConfig.merge(config);
+//            }
+//          });
 //
 //      Metrics.addRegistry(datadogMeterRegistry);
 //    }
