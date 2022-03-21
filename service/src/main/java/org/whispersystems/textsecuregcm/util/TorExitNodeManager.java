@@ -5,7 +5,6 @@
 
 package org.whispersystems.textsecuregcm.util;
 
-import com.amazonaws.services.s3.model.S3Object;
 import com.google.common.annotations.VisibleForTesting;
 import io.dropwizard.lifecycle.Managed;
 import java.io.BufferedReader;
@@ -22,6 +21,8 @@ import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.textsecuregcm.configuration.MonitoredS3ObjectConfiguration;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -57,12 +58,6 @@ public class TorExitNodeManager implements Managed {
 
   @Override
   public synchronized void start() {
-    try {
-      handleExitListChanged(exitListMonitor.getObject());
-    } catch (final Exception e) {
-      log.warn("Failed to load initial Tor exit node list", e);
-    }
-
     exitListMonitor.start();
   }
 
@@ -75,12 +70,12 @@ public class TorExitNodeManager implements Managed {
     return exitNodeAddresses.get().contains(address);
   }
 
-  private void handleExitListChanged(final S3Object exitList) {
-    REFRESH_TIMER.record(() -> handleExitListChanged(exitList.getObjectContent()));
+  private void handleExitListChanged(final ResponseInputStream<GetObjectResponse> exitList) {
+    REFRESH_TIMER.record(() -> handleExitListChanged(exitList));
   }
 
   @VisibleForTesting
-  void handleExitListChanged(final InputStream inputStream) {
+  void handleExitListChangedStream(final InputStream inputStream) {
     try (final BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
       exitNodeAddresses.set(reader.lines().collect(Collectors.toSet()));
     } catch (final Exception e) {
