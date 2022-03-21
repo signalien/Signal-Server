@@ -38,6 +38,8 @@ import io.micrometer.datadog.DatadogConfig;
 import io.micrometer.datadog.DatadogMeterRegistry;
 import io.micrometer.wavefront.WavefrontConfig;
 import io.micrometer.wavefront.WavefrontMeterRegistry;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -277,6 +279,19 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
 //    });
 
 //    {
+//      final String host;
+//
+//      {
+//        String localHostName = "unknown";
+//
+//        try {
+//          localHostName = InetAddress.getLocalHost().getHostName();
+//        } catch (final UnknownHostException ignored) {
+//        }
+//
+//        host = localHostName;
+//      }
+//
 //      final DatadogMeterRegistry datadogMeterRegistry = new DatadogMeterRegistry(new DatadogConfig() {
 //        @Override
 //        public String get(final String key) {
@@ -291,6 +306,11 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
 //        @Override
 //        public Duration step() {
 //          return config.getDatadogConfiguration().getStep();
+//        }
+//
+//        @Override
+//        public String hostTag() {
+//          return host;
 //        }
 //      }, Clock.SYSTEM);
 //
