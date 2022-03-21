@@ -175,7 +175,7 @@ public class WebSocketConnection implements MessageAvailabilityListener, Displac
             }
           }
 
-          if (message.getType() != Envelope.Type.RECEIPT) {
+          if (message.getType() != Envelope.Type.SERVER_DELIVERY_RECEIPT) {
             recordMessageDeliveryDuration(message.getTimestamp(), device);
             sendDeliveryReceiptFor(message);
           }

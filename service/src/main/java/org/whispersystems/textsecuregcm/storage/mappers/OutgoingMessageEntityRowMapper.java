@@ -23,7 +23,7 @@ public class OutgoingMessageEntityRowMapper implements RowMapper<OutgoingMessage
     String guid          = resultSet.getString(Messages.GUID);
     String sourceUuid    = resultSet.getString(Messages.SOURCE_UUID);
 
-    if (type == Envelope.Type.RECEIPT_VALUE && legacyMessage == null) {
+    if (type == Envelope.Type.SERVER_DELIVERY_RECEIPT_VALUE && legacyMessage == null) {
       /// XXX - REMOVE AFTER 10/01/15
       legacyMessage = new byte[0];
     }
