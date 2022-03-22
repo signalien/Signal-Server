@@ -39,6 +39,8 @@ public class DirectoryReconciler extends AccountDatabaseCrawlerListener {
   private final Timer                         sendChunkTimer;
   private final Meter                         sendChunkErrorMeter;
 
+  private boolean useV3Endpoints;
+
   public DirectoryReconciler(String name, boolean primary, DirectoryReconciliationClient reconciliationClient, DirectoryManager directoryManager) {
     this.name                 = name;
     this.primary              = primary;
@@ -53,8 +55,12 @@ public class DirectoryReconciler extends AccountDatabaseCrawlerListener {
 
   @Override
   public void onCrawlEnd(Optional<UUID> fromUuid) {
-    DirectoryReconciliationRequest  request  = new DirectoryReconciliationRequest(fromUuid.orElse(null), null, Collections.emptyList());
-    sendChunk(request);
+//    DirectoryReconciliationRequest  request  = new DirectoryReconciliationRequest(fromUuid.orElse(null), null, Collections.emptyList());
+//    sendChunk(request);
+
+    if (useV3Endpoints) {
+      reconciliationClient.complete();
+    }
   }
 
   @Override
@@ -63,11 +69,11 @@ public class DirectoryReconciler extends AccountDatabaseCrawlerListener {
       updateDirectoryCache(chunkAccounts);
     }
 
-    DirectoryReconciliationRequest  request  = createChunkRequest(fromUuid, chunkAccounts);
-    DirectoryReconciliationResponse response = sendChunk(request);
-    if (response.getStatus() == DirectoryReconciliationResponse.Status.MISSING) {
-      throw new AccountDatabaseCrawlerRestartException("directory reconciler missing");
-    }
+//    DirectoryReconciliationRequest  request  = createChunkRequest(fromUuid, chunkAccounts);
+//    DirectoryReconciliationResponse response = sendChunk(request);
+//    if (response.getStatus() == DirectoryReconciliationResponse.Status.MISSING) {
+//      throw new AccountDatabaseCrawlerRestartException("directory reconciler missing");
+//    }
   }
 
   private void updateDirectoryCache(List<Account> accounts) {
@@ -109,7 +115,12 @@ public class DirectoryReconciler extends AccountDatabaseCrawlerListener {
 
   private DirectoryReconciliationResponse sendChunk(DirectoryReconciliationRequest request) {
     try (Timer.Context timer = sendChunkTimer.time()) {
-      DirectoryReconciliationResponse response = reconciliationClient.sendChunk(request);
+      DirectoryReconciliationResponse response;
+      if (useV3Endpoints) {
+        response = reconciliationClient.sendChunkV3(request);
+      } else {
+        response = reconciliationClient.sendChunk(request);
+      }
       if (response.getStatus() != DirectoryReconciliationResponse.Status.OK) {
         sendChunkErrorMeter.mark();
         logger.warn("reconciliation error: " + response.getStatus());
@@ -122,4 +133,7 @@ public class DirectoryReconciler extends AccountDatabaseCrawlerListener {
     }
   }
 
+  public void setUseV3Endpoints(final boolean useV3Endpoints) {
+    this.useV3Endpoints = useV3Endpoints;
+  }
 }

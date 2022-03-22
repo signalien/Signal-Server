@@ -38,6 +38,8 @@ public class AccountDatabaseCrawler implements Managed, Runnable {
   private final AccountDatabaseCrawlerCache          cache;
   private final List<AccountDatabaseCrawlerListener> listeners;
 
+  private final DynamicConfigurationManager dynamicConfigurationManager;
+
   private AtomicBoolean running = new AtomicBoolean(false);
   private boolean finished;
 
@@ -45,7 +47,8 @@ public class AccountDatabaseCrawler implements Managed, Runnable {
                                 AccountDatabaseCrawlerCache cache,
                                 List<AccountDatabaseCrawlerListener> listeners,
                                 int chunkSize,
-                                long chunkIntervalMs)
+                                long chunkIntervalMs,
+                                DynamicConfigurationManager dynamicConfigurationManager)
   {
     this.accounts             = accounts;
     this.chunkSize            = chunkSize;
@@ -53,6 +56,8 @@ public class AccountDatabaseCrawler implements Managed, Runnable {
     this.workerId             = UUID.randomUUID().toString();
     this.cache                = cache;
     this.listeners            = listeners;
+
+    this.dynamicConfigurationManager = dynamicConfigurationManager;
   }
 
   @Override
@@ -93,14 +98,15 @@ public class AccountDatabaseCrawler implements Managed, Runnable {
   @VisibleForTesting
   public boolean doPeriodicWork() {
     if (cache.claimActiveWork(workerId, WORKER_TTL_MS)) {
+
       try {
-        long startTimeMs = System.currentTimeMillis();
+        final long startTimeMs = System.currentTimeMillis();
         processChunk();
         if (cache.isAccelerated()) {
           return true;
         }
-        long endTimeMs = System.currentTimeMillis();
-        long sleepIntervalMs = chunkIntervalMs - (endTimeMs - startTimeMs);
+        final long endTimeMs = System.currentTimeMillis();
+        final long sleepIntervalMs = chunkIntervalMs - (endTimeMs - startTimeMs);
         if (sleepIntervalMs > 0) sleepWhileRunning(sleepIntervalMs);
       } finally {
         cache.releaseActiveWork(workerId);
@@ -110,42 +116,67 @@ public class AccountDatabaseCrawler implements Managed, Runnable {
   }
 
   private void processChunk() {
-    Optional<UUID> fromUuid = cache.getLastUuid();
+    final boolean useDynamo = dynamicConfigurationManager.getConfiguration()
+        .getAccountsDynamoDbMigrationConfiguration()
+        .isDynamoCrawlerEnabled();
 
-    if (!fromUuid.isPresent()) {
+    listeners.stream().filter(listener -> listener instanceof DirectoryReconciler)
+        .forEach(reconciler -> ((DirectoryReconciler) reconciler).setUseV3Endpoints(useDynamo));
+
+    final Optional<UUID> fromUuid = getLastUuid(useDynamo);
+
+    if (fromUuid.isEmpty()) {
       listeners.forEach(AccountDatabaseCrawlerListener::onCrawlStart);
     }
 
-    List<Account> chunkAccounts = readChunk(fromUuid, chunkSize);
+    final AccountCrawlChunk chunkAccounts = readChunk(fromUuid, chunkSize, useDynamo);
 
-    if (chunkAccounts.isEmpty()) {
+    if (chunkAccounts.getAccounts().isEmpty()) {
       logger.info("Finished crawl");
       listeners.forEach(listener -> listener.onCrawlEnd(fromUuid));
-      cache.setLastUuid(Optional.empty());
+      cacheLastUuid(Optional.empty(), useDynamo);
       cache.setAccelerated(false);
     } else {
       try {
         for (AccountDatabaseCrawlerListener listener : listeners) {
-          listener.timeAndProcessCrawlChunk(fromUuid, chunkAccounts);
+          listener.timeAndProcessCrawlChunk(fromUuid, chunkAccounts.getAccounts());
         }
-        cache.setLastUuid(Optional.of(chunkAccounts.get(chunkAccounts.size() - 1).getUuid()));
+        cacheLastUuid(chunkAccounts.getLastUuid(), useDynamo);
       } catch (AccountDatabaseCrawlerRestartException e) {
-        cache.setLastUuid(Optional.empty());
+        cacheLastUuid(Optional.empty(), useDynamo);
         cache.setAccelerated(false);
       }
-
     }
-
   }
 
-  private List<Account> readChunk(Optional<UUID> fromUuid, int chunkSize) {
+  private AccountCrawlChunk readChunk(Optional<UUID> fromUuid, int chunkSize, boolean useDynamo) {
     try (Timer.Context timer = readChunkTimer.time()) {
 
       if (fromUuid.isPresent()) {
-        return accounts.getAllFrom(fromUuid.get(), chunkSize);
+        return useDynamo
+            ? accounts.getAllFromDynamo(fromUuid.get(), chunkSize)
+            : accounts.getAllFrom(fromUuid.get(), chunkSize);
       }
 
-      return accounts.getAllFrom(chunkSize);
+      return useDynamo
+          ? accounts.getAllFromDynamo(chunkSize)
+          : accounts.getAllFrom(chunkSize);
+    }
+  }
+
+  private Optional<UUID> getLastUuid(final boolean useDynamo) {
+    if (useDynamo) {
+      return cache.getLastUuidDynamo();
+    } else {
+      return cache.getLastUuid();
+    }
+  }
+
+  private void cacheLastUuid(final Optional<UUID> lastUuid, final boolean useDynamo) {
+    if (useDynamo) {
+      cache.setLastUuidDynamo(lastUuid);
+    } else {
+      cache.setLastUuid(lastUuid);
     }
   }
 
