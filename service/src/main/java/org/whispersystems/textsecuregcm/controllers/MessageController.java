@@ -496,6 +496,11 @@ public class MessageController {
   public OutgoingMessageEntityList getPendingMessages(@Auth Account account, @HeaderParam("User-Agent") String userAgent) {
     assert account.getAuthenticatedDevice().isPresent();
 
+    // TODO Remove once PIN-based reglocks have been deprecated
+    if (account.getRegistrationLock().requiresClientRegistrationLock() && account.getRegistrationLock().hasDeprecatedPin()) {
+      logger.info("User-Agent with deprecated PIN-based registration lock: {}", userAgent);
+    }
+
     if (!Util.isEmpty(account.getAuthenticatedDevice().get().getApnId())) {
       RedisOperation.unchecked(() -> apnFallbackManager.cancel(account, account.getAuthenticatedDevice().get()));
     }
