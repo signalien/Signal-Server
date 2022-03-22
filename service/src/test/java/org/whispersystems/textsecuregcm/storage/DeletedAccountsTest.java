@@ -13,24 +13,44 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.whispersystems.textsecuregcm.util.Pair;
 import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition;
+import software.amazon.awssdk.services.dynamodb.model.GlobalSecondaryIndex;
+import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement;
+import software.amazon.awssdk.services.dynamodb.model.KeyType;
+import software.amazon.awssdk.services.dynamodb.model.Projection;
+import software.amazon.awssdk.services.dynamodb.model.ProjectionType;
+import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput;
 import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
 
 class DeletedAccountsTest {
 
+  private static final String NEEDS_RECONCILIATION_INDEX_NAME = "needs_reconciliation_test";
+
   @RegisterExtension
   static DynamoDbExtension dynamoDbExtension = DynamoDbExtension.builder()
       .tableName("deleted_accounts_test")
-      .hashKey(DeletedAccounts.KEY_ACCOUNT_UUID)
+      .hashKey(DeletedAccounts.KEY_ACCOUNT_E164)
       .attributeDefinition(AttributeDefinition.builder()
-          .attributeName(DeletedAccounts.KEY_ACCOUNT_UUID)
-          .attributeType(ScalarAttributeType.B).build())
+          .attributeName(DeletedAccounts.KEY_ACCOUNT_E164)
+          .attributeType(ScalarAttributeType.S).build())
+      .attributeDefinition(AttributeDefinition.builder()
+          .attributeName(DeletedAccounts.ATTR_NEEDS_CDS_RECONCILIATION)
+          .attributeType(ScalarAttributeType.N)
+          .build())
+      .globalSecondaryIndex(GlobalSecondaryIndex.builder()
+          .indexName(NEEDS_RECONCILIATION_INDEX_NAME)
+          .keySchema(KeySchemaElement.builder().attributeName(DeletedAccounts.KEY_ACCOUNT_E164).keyType(KeyType.HASH).build(),
+              KeySchemaElement.builder().attributeName(DeletedAccounts.ATTR_NEEDS_CDS_RECONCILIATION).keyType(KeyType.RANGE).build())
+          .projection(Projection.builder().projectionType(ProjectionType.INCLUDE).nonKeyAttributes(DeletedAccounts.ATTR_ACCOUNT_UUID).build())
+          .provisionedThroughput(ProvisionedThroughput.builder().readCapacityUnits(10L).writeCapacityUnits(10L).build())
+          .build())
       .build();
 
   @Test
   void test() {
 
     final DeletedAccounts deletedAccounts = new DeletedAccounts(dynamoDbExtension.getDynamoDbClient(),
-        dynamoDbExtension.getTableName());
+        dynamoDbExtension.getTableName(),
+        NEEDS_RECONCILIATION_INDEX_NAME);
 
     UUID firstUuid = UUID.randomUUID();
     UUID secondUuid = UUID.randomUUID();
@@ -38,20 +58,20 @@ class DeletedAccountsTest {
     String firstNumber = "+14152221234";
     String secondNumber = "+14152225678";
 
-    assertTrue(deletedAccounts.list(1).isEmpty());
+    assertTrue(deletedAccounts.listAccountsToReconcile(1).isEmpty());
 
     deletedAccounts.put(firstUuid, firstNumber);
     deletedAccounts.put(secondUuid, secondNumber);
 
-    assertEquals(1, deletedAccounts.list(1).size());
+    assertEquals(1, deletedAccounts.listAccountsToReconcile(1).size());
 
-    assertTrue(deletedAccounts.list(10).containsAll(
+    assertTrue(deletedAccounts.listAccountsToReconcile(10).containsAll(
         List.of(
             new Pair<>(firstUuid, firstNumber),
             new Pair<>(secondUuid, secondNumber))));
 
-    deletedAccounts.delete(List.of(firstUuid, secondUuid));
+    deletedAccounts.markReconciled(List.of(firstNumber, secondNumber));
 
-    assertTrue(deletedAccounts.list(10).isEmpty());
+    assertTrue(deletedAccounts.listAccountsToReconcile(10).isEmpty());
   }
 }
