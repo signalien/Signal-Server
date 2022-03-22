@@ -5,27 +5,53 @@
 package org.whispersystems.textsecuregcm.storage;
 
 import org.whispersystems.textsecuregcm.auth.StoredVerificationCode;
+import org.whispersystems.textsecuregcm.util.Constants;
 
 import java.util.Optional;
 
 public class PendingAccountsManager {
 
   private final PendingAccounts pendingAccounts;
+  private final VerificationCodeStoreDynamoDb pendingAccountsDynamoDb;
+  private final DynamicConfigurationManager dynamicConfigurationManager;
 
-  public PendingAccountsManager(PendingAccounts pendingAccounts)
-  {
+  public PendingAccountsManager(
+      final PendingAccounts pendingAccounts,
+      final VerificationCodeStoreDynamoDb pendingAccountsDynamoDb,
+      final DynamicConfigurationManager dynamicConfigurationManager) {
+
     this.pendingAccounts = pendingAccounts;
+    this.pendingAccountsDynamoDb = pendingAccountsDynamoDb;
+    this.dynamicConfigurationManager = dynamicConfigurationManager;
   }
 
   public void store(String number, StoredVerificationCode code) {
-    pendingAccounts.insert(number, code);
+    switch (dynamicConfigurationManager.getConfiguration().getPendingAccountsMigrationConfiguration().getWriteDestination()) {
+
+      case POSTGRES:
+        pendingAccounts.insert(number, code);
+        break;
+
+      case DYNAMODB:
+        pendingAccountsDynamoDb.insert(number, code);
+        break;
+    }
   }
 
   public void remove(String number) {
     pendingAccounts.remove(number);
+    if (Constants.DYNAMO_DB) pendingAccountsDynamoDb.remove(number);
   }
 
   public Optional<StoredVerificationCode> getCodeForNumber(String number) {
-    return pendingAccounts.findForNumber(number);
+    final Optional<StoredVerificationCode> maybeCodeFromPostgres =
+        dynamicConfigurationManager.getConfiguration().getPendingAccountsMigrationConfiguration().isReadPostgres()
+            ? pendingAccounts.findForNumber(number)
+            : Optional.empty();
+
+    return maybeCodeFromPostgres.or(
+        () -> dynamicConfigurationManager.getConfiguration().getPendingAccountsMigrationConfiguration().isReadDynamoDb()
+            ? pendingAccountsDynamoDb.findForNumber(number)
+            : Optional.empty());
   }
 }
