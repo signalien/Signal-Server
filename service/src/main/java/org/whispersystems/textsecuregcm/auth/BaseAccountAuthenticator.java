@@ -7,7 +7,6 @@ package org.whispersystems.textsecuregcm.auth;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.dropwizard.auth.basic.BasicCredentials;
-import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import org.apache.commons.lang3.StringUtils;
@@ -30,8 +29,7 @@ public class BaseAccountAuthenticator {
   private static final String AUTHENTICATION_FAILURE_REASON_TAG_NAME = "reason";
   private static final String AUTHENTICATION_ENABLED_REQUIRED_TAG_NAME = "enabledRequired";
 
-  private final String daysSinceLastSeenDistributionName = name(getClass(), "authentication", "daysSinceLastSeen");
-
+  private static final String DAYS_SINCE_LAST_SEEN_DISTRIBUTION_NAME = name(BaseAccountAuthenticator.class, "daysSinceLastSeen");
   private static final String IS_PRIMARY_DEVICE_TAG = "isPrimary";
 
   private final AccountsManager accountsManager;
@@ -109,10 +107,7 @@ public class BaseAccountAuthenticator {
     final long todayInMillisWithOffset = Util.todayInMillisGivenOffsetFromNow(clock, Duration.ofSeconds(lastSeenOffsetSeconds).negated());
 
     if (device.getLastSeen() < todayInMillisWithOffset) {
-      DistributionSummary.builder(daysSinceLastSeenDistributionName)
-          .tags(IS_PRIMARY_DEVICE_TAG, String.valueOf(device.isMaster()))
-          .publishPercentileHistogram()
-          .register(Metrics.globalRegistry)
+      Metrics.summary(DAYS_SINCE_LAST_SEEN_DISTRIBUTION_NAME, IS_PRIMARY_DEVICE_TAG, String.valueOf(device.isMaster()))
           .record(Duration.ofMillis(todayInMillisWithOffset - device.getLastSeen()).toDays());
 
       device.setLastSeen(Util.todayInMillis(clock));
