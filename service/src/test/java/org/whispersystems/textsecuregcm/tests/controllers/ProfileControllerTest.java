@@ -27,11 +27,16 @@ import java.util.Set;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
+import io.dropwizard.testing.junit5.ResourceExtension;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
 import org.signal.zkgroup.InvalidInputException;
@@ -57,13 +62,15 @@ import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.ProfilesManager;
 import org.whispersystems.textsecuregcm.storage.UsernamesManager;
 import org.whispersystems.textsecuregcm.storage.VersionedProfile;
+import org.whispersystems.textsecuregcm.tests.util.AccountsHelper;
 import org.whispersystems.textsecuregcm.tests.util.AuthHelper;
 import org.whispersystems.textsecuregcm.util.SystemMapper;
 import org.whispersystems.textsecuregcm.util.Util;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 
-public class ProfileControllerTest {
+@ExtendWith(DropwizardExtensionsSupport.class)
+class ProfileControllerTest {
 
   private static AccountsManager  accountsManager     = mock(AccountsManager.class );
   private static ProfilesManager  profilesManager     = mock(ProfilesManager.class);
@@ -82,29 +89,29 @@ public class ProfileControllerTest {
 
   private Account profileAccount;
 
+  private static final ResourceExtension resources = ResourceExtension.builder()
+                                                                      .addProvider(AuthHelper.getAuthFilter())
+                                                                      .addProvider(new PolymorphicAuthValueFactoryProvider.Binder<>(ImmutableSet.of(Account.class, DisabledPermittedAccount.class)))
+                                                                      .setMapper(SystemMapper.getMapper())
+                                                                      .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
+                                                                      .addResource(new ProfileController(rateLimiters,
+                                                                                                         accountsManager,
+                                                                                                         profilesManager,
+                                                                                                         usernamesManager,
+                                                                                                         dynamicConfigurationManager,
+                                                                                                         s3client,
+                                                                                                         postPolicyGenerator,
+                                                                                                         policySigner,
+                                                                                                         "profilesBucket",
+                                                                                                         zkProfileOperations,
+                                                                                                         true))
+                                                                      .build();
 
-  @ClassRule
-  public static final ResourceTestRule resources = ResourceTestRule.builder()
-                                                                   .addProvider(AuthHelper.getAuthFilter())
-                                                                   .addProvider(new PolymorphicAuthValueFactoryProvider.Binder<>(ImmutableSet.of(Account.class, DisabledPermittedAccount.class)))
-                                                                   .setMapper(SystemMapper.getMapper())
-                                                                   .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
-                                                                   .addResource(new ProfileController(rateLimiters,
-                                                                                                      accountsManager,
-                                                                                                      profilesManager,
-                                                                                                      usernamesManager,
-                                                                                                      dynamicConfigurationManager,
-                                                                                                      s3client,
-                                                                                                      postPolicyGenerator,
-                                                                                                      policySigner,
-                                                                                                      "profilesBucket",
-                                                                                                      zkProfileOperations,
-                                                                                                      true))
-                                                                   .build();
-
-  @Before
-  public void setup() throws Exception {
+  @BeforeEach
+  void setup() throws Exception {
     reset(s3client);
+
+    AccountsHelper.setupMockUpdate(accountsManager);
 
     dynamicPaymentsConfiguration = mock(DynamicPaymentsConfiguration.class);
     final DynamicConfiguration dynamicConfiguration = mock(DynamicConfiguration.class);
@@ -161,8 +168,13 @@ public class ProfileControllerTest {
     clearInvocations(profilesManager);
   }
 
+  @AfterEach
+  void teardown() {
+    reset(accountsManager);
+  }
+
   @Test
-  public void testProfileGetByUuid() throws RateLimitExceededException {
+  void testProfileGetByUuid() throws RateLimitExceededException {
     Profile profile= resources.getJerseyTest()
                               .target("/v1/profile/" + AuthHelper.VALID_UUID_TWO)
                               .request()
@@ -180,7 +192,7 @@ public class ProfileControllerTest {
   }
 
   @Test
-  public void testProfileGetByNumber() throws RateLimitExceededException {
+  void testProfileGetByNumber() throws RateLimitExceededException {
     Profile profile= resources.getJerseyTest()
                               .target("/v1/profile/" + AuthHelper.VALID_NUMBER_TWO)
                               .request()
@@ -201,7 +213,7 @@ public class ProfileControllerTest {
   }
 
   @Test
-  public void testProfileGetByUsername() throws RateLimitExceededException {
+  void testProfileGetByUsername() throws RateLimitExceededException {
     Profile profile= resources.getJerseyTest()
                               .target("/v1/profile/username/n00bkiller")
                               .request()
@@ -220,7 +232,7 @@ public class ProfileControllerTest {
   }
 
   @Test
-  public void testProfileGetUnauthorized() {
+  void testProfileGetUnauthorized() {
     Response response = resources.getJerseyTest()
                                  .target("/v1/profile/" + AuthHelper.VALID_NUMBER_TWO)
                                  .request()
@@ -230,7 +242,7 @@ public class ProfileControllerTest {
   }
 
   @Test
-  public void testProfileGetByUsernameUnauthorized() {
+  void testProfileGetByUsernameUnauthorized() {
     Response response = resources.getJerseyTest()
                                  .target("/v1/profile/username/n00bkiller")
                                  .request()
@@ -241,7 +253,7 @@ public class ProfileControllerTest {
 
 
   @Test
-  public void testProfileGetByUsernameNotFound() throws RateLimitExceededException {
+  void testProfileGetByUsernameNotFound() throws RateLimitExceededException {
     Response response = resources.getJerseyTest()
                               .target("/v1/profile/username/n00bkillerzzzzz")
                               .request()
@@ -256,7 +268,7 @@ public class ProfileControllerTest {
 
 
   @Test
-  public void testProfileGetDisabled() {
+  void testProfileGetDisabled() {
     Response response = resources.getJerseyTest()
                                  .target("/v1/profile/" + AuthHelper.VALID_NUMBER_TWO)
                                  .request()
@@ -267,7 +279,7 @@ public class ProfileControllerTest {
   }
 
   @Test
-  public void testProfileCapabilities() {
+  void testProfileCapabilities() {
     Profile profile= resources.getJerseyTest()
                               .target("/v1/profile/" + AuthHelper.VALID_NUMBER)
                               .request()
@@ -293,7 +305,7 @@ public class ProfileControllerTest {
   }
 
   @Test
-  public void testSetProfileNameDeprecated() {
+  void testSetProfileNameDeprecated() {
     Response response = resources.getJerseyTest()
                                  .target("/v1/profile/name/123456789012345678901234567890123456789012345678901234567890123456789012")
                                  .request()
@@ -302,11 +314,11 @@ public class ProfileControllerTest {
 
     assertThat(response.getStatus()).isEqualTo(204);
 
-    verify(accountsManager, times(1)).update(any(Account.class));
+    verify(accountsManager, times(1)).update(any(Account.class), any());
   }
 
   @Test
-  public void testSetProfileNameExtendedDeprecated() {
+  void testSetProfileNameExtendedDeprecated() {
     Response response = resources.getJerseyTest()
                                  .target("/v1/profile/name/123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678")
                                  .request()
@@ -315,11 +327,11 @@ public class ProfileControllerTest {
 
     assertThat(response.getStatus()).isEqualTo(204);
 
-    verify(accountsManager, times(1)).update(any(Account.class));
+    verify(accountsManager, times(1)).update(any(Account.class), any());
   }
 
   @Test
-  public void testSetProfileNameWrongSizeDeprecated() {
+  void testSetProfileNameWrongSizeDeprecated() {
     Response response = resources.getJerseyTest()
                                  .target("/v1/profile/name/1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890")
                                  .request()
@@ -333,7 +345,7 @@ public class ProfileControllerTest {
   /////
 
   @Test
-  public void testSetProfileWantAvatarUpload() throws InvalidInputException {
+  void testSetProfileWantAvatarUpload() throws InvalidInputException {
     ProfileKeyCommitment commitment = new ProfileKey(new byte[32]).getCommitment(AuthHelper.VALID_UUID);
 
     ProfileAvatarUploadAttributes uploadAttributes = resources.getJerseyTest()
@@ -358,7 +370,7 @@ public class ProfileControllerTest {
     assertThat(profileArgumentCaptor.getValue().getAbout()).isNull();  }
 
   @Test
-  public void testSetProfileWantAvatarUploadWithBadProfileSize() throws InvalidInputException {
+  void testSetProfileWantAvatarUploadWithBadProfileSize() throws InvalidInputException {
     ProfileKeyCommitment commitment = new ProfileKey(new byte[32]).getCommitment(AuthHelper.VALID_UUID);
 
     Response response = resources.getJerseyTest()
@@ -372,7 +384,7 @@ public class ProfileControllerTest {
   }
 
   @Test
-  public void testSetProfileWithoutAvatarUpload() throws InvalidInputException {
+  void testSetProfileWithoutAvatarUpload() throws InvalidInputException {
     ProfileKeyCommitment commitment = new ProfileKey(new byte[32]).getCommitment(AuthHelper.VALID_UUID);
 
     clearInvocations(AuthHelper.VALID_ACCOUNT_TWO);
@@ -406,7 +418,7 @@ public class ProfileControllerTest {
   }
 
   @Test
-  public void testSetProfileWithAvatarUploadAndPreviousAvatar() throws InvalidInputException {
+  void testSetProfileWithAvatarUploadAndPreviousAvatar() throws InvalidInputException {
     ProfileKeyCommitment commitment = new ProfileKey(new byte[32]).getCommitment(AuthHelper.VALID_UUID_TWO);
 
     ProfileAvatarUploadAttributes uploadAttributes= resources.getJerseyTest()
@@ -430,7 +442,7 @@ public class ProfileControllerTest {
     assertThat(profileArgumentCaptor.getValue().getAbout()).isNull();  }
 
   @Test
-  public void testSetProfileExtendedName() throws InvalidInputException {
+  void testSetProfileExtendedName() throws InvalidInputException {
     ProfileKeyCommitment commitment = new ProfileKey(new byte[32]).getCommitment(AuthHelper.VALID_UUID_TWO);
 
     final String name = RandomStringUtils.randomAlphabetic(380);
@@ -456,7 +468,7 @@ public class ProfileControllerTest {
   }
 
   @Test
-  public void testSetProfileEmojiAndBioText() throws InvalidInputException {
+  void testSetProfileEmojiAndBioText() throws InvalidInputException {
     ProfileKeyCommitment commitment = new ProfileKey(new byte[32]).getCommitment(AuthHelper.VALID_UUID);
 
     clearInvocations(AuthHelper.VALID_ACCOUNT_TWO);
@@ -495,7 +507,7 @@ public class ProfileControllerTest {
   }
 
   @Test
-  public void testSetProfilePaymentAddress() throws InvalidInputException {
+  void testSetProfilePaymentAddress() throws InvalidInputException {
     when(dynamicPaymentsConfiguration.getAllowedCountryCodes())
         .thenReturn(Set.of(Util.getCountryCode(AuthHelper.VALID_NUMBER_TWO)));
 
@@ -536,7 +548,7 @@ public class ProfileControllerTest {
   }
 
   @Test
-  public void testSetProfilePaymentAddressCountryNotAllowed() throws InvalidInputException {
+  void testSetProfilePaymentAddressCountryNotAllowed() throws InvalidInputException {
     ProfileKeyCommitment commitment = new ProfileKey(new byte[32]).getCommitment(AuthHelper.VALID_UUID);
 
     clearInvocations(AuthHelper.VALID_ACCOUNT_TWO);
@@ -557,7 +569,7 @@ public class ProfileControllerTest {
   }
 
   @Test
-  public void testGetProfileByVersion() throws RateLimitExceededException {
+  void testGetProfileByVersion() throws RateLimitExceededException {
     Profile profile = resources.getJerseyTest()
                                .target("/v1/profile/" + AuthHelper.VALID_UUID_TWO + "/validversion")
                                .request()
@@ -582,7 +594,7 @@ public class ProfileControllerTest {
   }
 
   @Test
-  public void testSetProfileUpdatesAccountCurrentVersion() throws InvalidInputException {
+  void testSetProfileUpdatesAccountCurrentVersion() throws InvalidInputException {
     when(dynamicPaymentsConfiguration.getAllowedCountryCodes())
         .thenReturn(Set.of(Util.getCountryCode(AuthHelper.VALID_NUMBER_TWO)));
 
@@ -606,7 +618,7 @@ public class ProfileControllerTest {
   }
 
   @Test
-  public void testGetProfileReturnsNoPaymentAddressIfCurrentVersionMismatch() {
+  void testGetProfileReturnsNoPaymentAddressIfCurrentVersionMismatch() {
     when(profilesManager.get(AuthHelper.VALID_UUID_TWO, "validversion")).thenReturn(
         Optional.of(new VersionedProfile(null, null, null, null, null, "paymentaddress", null)));
     Profile profile = resources.getJerseyTest()

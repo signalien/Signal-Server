@@ -38,6 +38,7 @@ import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.Keys;
 import org.whispersystems.textsecuregcm.storage.KeysDynamoDb;
+import org.whispersystems.textsecuregcm.tests.util.AccountsHelper;
 import org.whispersystems.textsecuregcm.tests.util.AuthHelper;
 
 import javax.ws.rs.client.Entity;
@@ -56,6 +57,7 @@ import java.util.UUID;
 import io.dropwizard.auth.PolymorphicAuthValueFactoryProvider;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
+import static org.whispersystems.textsecuregcm.tests.util.AccountsHelper.eqUuid;
 
 @ExtendWith(DropwizardExtensionsSupport.class)
 class KeysControllerTest {
@@ -109,12 +111,14 @@ class KeysControllerTest {
     final Device sampleDevice3 = mock(Device.class);
     final Device sampleDevice4 = mock(Device.class);
 
-    Set<Device> allDevices = new HashSet<Device>() {{
+    Set<Device> allDevices = new HashSet<>() {{
       add(sampleDevice);
       add(sampleDevice2);
       add(sampleDevice3);
       add(sampleDevice4);
     }};
+
+    AccountsHelper.setupMockUpdate(accounts);
 
     when(sampleDevice.getRegistrationId()).thenReturn(SAMPLE_REGISTRATION_ID);
     when(sampleDevice2.getRegistrationId()).thenReturn(SAMPLE_REGISTRATION_ID2);
@@ -137,7 +141,7 @@ class KeysControllerTest {
     when(existsAccount.getDevice(2L)).thenReturn(Optional.of(sampleDevice2));
     when(existsAccount.getDevice(3L)).thenReturn(Optional.of(sampleDevice3));
     when(existsAccount.getDevice(4L)).thenReturn(Optional.of(sampleDevice4));
-    when(existsAccount.getDevice(22L)).thenReturn(Optional.<Device>empty());
+    when(existsAccount.getDevice(22L)).thenReturn(Optional.empty());
     when(existsAccount.getDevices()).thenReturn(allDevices);
     when(existsAccount.isEnabled()).thenReturn(true);
     when(existsAccount.getIdentityKey()).thenReturn("existsidentitykey");
@@ -251,7 +255,7 @@ class KeysControllerTest {
     assertThat(response.getStatus()).isEqualTo(204);
 
     verify(AuthHelper.VALID_DEVICE).setSignedPreKey(eq(test));
-    verify(accounts).update(eq(AuthHelper.VALID_ACCOUNT));
+    verify(accounts).updateDevice(eq(AuthHelper.VALID_ACCOUNT), anyLong(), any());
   }
 
   @Test
@@ -266,7 +270,7 @@ class KeysControllerTest {
     assertThat(response.getStatus()).isEqualTo(204);
 
     verify(AuthHelper.VALID_DEVICE).setSignedPreKey(eq(test));
-    verify(accounts).update(eq(AuthHelper.VALID_ACCOUNT));
+    verify(accounts).updateDevice(eq(AuthHelper.VALID_ACCOUNT), anyLong(), any());
   }
 
 
@@ -573,7 +577,7 @@ class KeysControllerTest {
     assertThat(response.getStatus()).isEqualTo(204);
 
     ArgumentCaptor<List> listCaptor = ArgumentCaptor.forClass(List.class);
-    verify(keysDynamoDb).store(eq(AuthHelper.VALID_ACCOUNT), eq(1L), listCaptor.capture());
+    verify(keysDynamoDb).store(eqUuid(AuthHelper.VALID_ACCOUNT), eq(1L), listCaptor.capture());
 
     List<PreKey> capturedList = listCaptor.getValue();
     assertThat(capturedList.size()).isEqualTo(1);
@@ -582,7 +586,7 @@ class KeysControllerTest {
 
     verify(AuthHelper.VALID_ACCOUNT).setIdentityKey(eq("barbar"));
     verify(AuthHelper.VALID_DEVICE).setSignedPreKey(eq(signedPreKey));
-    verify(accounts).update(AuthHelper.VALID_ACCOUNT);
+    verify(accounts).update(eq(AuthHelper.VALID_ACCOUNT), any());
   }
 
   @Test
@@ -607,7 +611,7 @@ class KeysControllerTest {
     assertThat(response.getStatus()).isEqualTo(204);
 
     ArgumentCaptor<List> listCaptor = ArgumentCaptor.forClass(List.class);
-    verify(keysDynamoDb).store(eq(AuthHelper.DISABLED_ACCOUNT), eq(1L), listCaptor.capture());
+    verify(keysDynamoDb).store(eqUuid(AuthHelper.DISABLED_ACCOUNT), eq(1L), listCaptor.capture());
 
     List<PreKey> capturedList = listCaptor.getValue();
     assertThat(capturedList.size()).isEqualTo(1);
@@ -616,7 +620,7 @@ class KeysControllerTest {
 
     verify(AuthHelper.DISABLED_ACCOUNT).setIdentityKey(eq("barbar"));
     verify(AuthHelper.DISABLED_DEVICE).setSignedPreKey(eq(signedPreKey));
-    verify(accounts).update(AuthHelper.DISABLED_ACCOUNT);
+    verify(accounts).update(eq(AuthHelper.DISABLED_ACCOUNT), any());
   }
 
   @Test

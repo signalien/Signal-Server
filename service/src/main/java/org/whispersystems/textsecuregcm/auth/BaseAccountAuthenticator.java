@@ -119,7 +119,7 @@ public class BaseAccountAuthenticator {
           .record(Duration.ofMillis(todayInMillisWithOffset - device.getLastSeen()).toDays());
 
       device.setLastSeen(Util.todayInMillis(clock));
-      accountsManager.update(account);
+      accountsManager.updateDevice(account, device.getId(), d -> d.setLastSeen(Util.todayInMillis(clock)));
     }
   }
 

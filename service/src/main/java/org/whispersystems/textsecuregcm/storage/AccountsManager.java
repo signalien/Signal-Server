@@ -26,6 +26,8 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import net.logstash.logback.argument.StructuredArguments;
 import org.apache.commons.lang3.StringUtils;
@@ -124,7 +126,6 @@ public class AccountsManager {
     this.mapper              = SystemMapper.getMapper();
 
     this.migrationComparisonMapper = mapper.copy();
-    migrationComparisonMapper.addMixIn(Account.class, AccountComparisonMixin.class);
     migrationComparisonMapper.addMixIn(Device.class, DeviceComparisonMixin.class);
 
     this.dynamicConfigurationManager = dynamicConfigurationManager;
@@ -175,26 +176,88 @@ public class AccountsManager {
     }
   }
 
-  public void update(Account account) {
+  public Account update(Account account, Consumer<Account> updater) {
+
+    final Account updatedAccount;
+
     try (Timer.Context ignored = updateTimer.time()) {
-      account.setDynamoDbMigrationVersion(account.getDynamoDbMigrationVersion() + 1);
-      redisSet(account);
-      databaseUpdate(account);
-      updateDirectory(account);
+      updater.accept(account);
+
+      {
+        // optimistically increment version
+        final int originalVersion = account.getVersion();
+        account.setVersion(originalVersion + 1);
+        redisSet(account);
+        updateDirectory(account);
+        account.setVersion(originalVersion);
+      }
+
+      final UUID uuid = account.getUuid();
+
+      updatedAccount = updateWithRetries(account, updater, this::databaseUpdate, () -> databaseGet(uuid).get());
 
       if (dynamoWriteEnabled()) {
         runSafelyAndRecordMetrics(() -> {
-              try {
-                dynamoUpdate(account);
-              } catch (final ConditionalCheckFailedException e) {
-                dynamoCreate(account);
+
+              final Optional<Account> dynamoAccount = dynamoGet(uuid);
+              if (dynamoAccount.isPresent()) {
+                updater.accept(dynamoAccount.get());
+                Account dynamoUpdatedAccount = updateWithRetries(dynamoAccount.get(),
+                    updater,
+                    this::dynamoUpdate,
+                    () -> dynamoGet(uuid).get());
+
+                return Optional.of(dynamoUpdatedAccount);
               }
-              return true;
-            }, Optional.of(account.getUuid()), true,
-            (databaseSuccess, dynamoSuccess) -> Optional.empty(), // both values are always true
+
+              return Optional.empty();
+            }, Optional.of(uuid), Optional.of(updatedAccount),
+            this::compareAccounts,
             "update");
       }
+
+      // set the cache again, so that all updates are coalesced
+      redisSet(updatedAccount);
+      updateDirectory(account);
     }
+
+    return updatedAccount;
+  }
+
+  private Account updateWithRetries(Account account, Consumer<Account> updater, Consumer<Account> persister, Supplier<Account> retriever) {
+
+    final int maxTries = 10;
+    int tries = 0;
+
+    while (tries < maxTries) {
+
+      try {
+        persister.accept(account);
+
+        final Account updatedAccount;
+        try {
+          updatedAccount = mapper.readValue(mapper.writeValueAsBytes(account), Account.class);
+          updatedAccount.setUuid(account.getUuid());
+        } catch (final IOException e) {
+          // this should really, truly, never happen
+          throw new IllegalArgumentException(e);
+        }
+
+        account.markStale();
+
+        return updatedAccount;
+      } catch (final ContestedOptimisticLockException e) {
+        tries++;
+        account = retriever.get();
+        updater.accept(account);
+      }
+    }
+
+    throw new OptimisticLockRetryLimitExceededException();
+  }
+
+  public Account updateDevice(Account account, long deviceId, Consumer<Device> deviceUpdater) {
+    return update(account, a -> a.getDevice(deviceId).ifPresent(deviceUpdater));
   }
 
   public Optional<Account> get(AmbiguousIdentifier identifier) {
@@ -468,6 +531,10 @@ public class AccountsManager {
       return Optional.of("number");
     }
 
+    if (databaseAccount.getVersion() != dynamoAccount.getVersion()) {
+      return Optional.of("version");
+    }
+
     if (!Objects.equals(databaseAccount.getIdentityKey(), dynamoAccount.getIdentityKey())) {
       return Optional.of("identityKey");
     }
@@ -586,13 +653,6 @@ public class AccountsManager {
         .filter(stackTraceElement -> !(stackTraceElement.getClassName().endsWith("AccountsManager") && stackTraceElement.getMethodName().contains("compare")))
         .map(stackTraceElement -> StringUtils.substringAfterLast(stackTraceElement.getClassName(), ".") + ":" + stackTraceElement.getMethodName())
         .collect(Collectors.joining(" -> "));
-  }
-
-  private static abstract class AccountComparisonMixin extends Account {
-
-    @JsonIgnore
-    private int dynamoDbMigrationVersion;
-
   }
 
   private static abstract class DeviceComparisonMixin extends Device {

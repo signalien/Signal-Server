@@ -5,7 +5,7 @@ import java.util.UUID;
 
 public interface AccountStore {
 
-  boolean create(Account account);
+  boolean create(Account account) throws ContestedOptimisticLockException;
 
   void update(Account account);
 

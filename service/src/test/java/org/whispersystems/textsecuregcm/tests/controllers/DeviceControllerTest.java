@@ -6,6 +6,7 @@ package org.whispersystems.textsecuregcm.tests.controllers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
@@ -20,7 +21,6 @@ import io.dropwizard.testing.junit.ResourceTestRule;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import javax.ws.rs.Path;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
@@ -48,6 +48,7 @@ import org.whispersystems.textsecuregcm.storage.Device.DeviceCapabilities;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
 import org.whispersystems.textsecuregcm.storage.PendingDevicesManager;
 import org.whispersystems.textsecuregcm.storage.StoredVerificationCodeManager;
+import org.whispersystems.textsecuregcm.tests.util.AccountsHelper;
 import org.whispersystems.textsecuregcm.tests.util.AuthHelper;
 import org.whispersystems.textsecuregcm.util.VerificationCode;
 
@@ -127,6 +128,8 @@ public class DeviceControllerTest {
     when(pendingDevicesManager.getCodeForNumber(AuthHelper.VALID_NUMBER_TWO)).thenReturn(Optional.empty());
     when(accountsManager.get(AuthHelper.VALID_NUMBER)).thenReturn(Optional.of(account));
     when(accountsManager.get(AuthHelper.VALID_NUMBER_TWO)).thenReturn(Optional.of(maxedAccount));
+
+    AccountsHelper.setupMockUpdate(accountsManager);
   }
 
   @Test
@@ -363,7 +366,7 @@ public class DeviceControllerTest {
     assertThat(response.getStatus()).isEqualTo(204);
 
     verify(messagesManager, times(2)).clear(AuthHelper.VALID_UUID, deviceId);
-    verify(accountsManager, times(1)).update(AuthHelper.VALID_ACCOUNT);
+    verify(accountsManager, times(1)).update(eq(AuthHelper.VALID_ACCOUNT), any());
     verify(AuthHelper.VALID_ACCOUNT).removeDevice(deviceId);
   }
 

@@ -16,6 +16,7 @@ import org.whispersystems.textsecuregcm.util.Constants;
 import org.whispersystems.textsecuregcm.util.SystemMapper;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,10 +24,11 @@ import static com.codahale.metrics.MetricRegistry.name;
 
 public class Accounts implements AccountStore {
 
-  public static final String ID     = "id";
-  public static final String UID    = "uuid";
+  public static final String ID = "id";
+  public static final String UID = "uuid";
   public static final String NUMBER = "number";
-  public static final String DATA   = "data";
+  public static final String DATA = "data";
+  public static final String VERSION = "version";
 
   private static final ObjectMapper mapper = SystemMapper.getMapper();
 
@@ -51,15 +53,19 @@ public class Accounts implements AccountStore {
   public boolean create(Account account) {
     return database.with(jdbi -> jdbi.inTransaction(TransactionIsolationLevel.SERIALIZABLE, handle -> {
       try (Timer.Context ignored = createTimer.time()) {
-        UUID uuid = handle.createQuery("INSERT INTO accounts (" + NUMBER + ", " + UID + ", " + DATA + ") VALUES (:number, :uuid, CAST(:data AS json)) ON CONFLICT(number) DO UPDATE SET data = EXCLUDED.data RETURNING uuid")
-                          .bind("number", account.getNumber())
-                          .bind("uuid", account.getUuid())
-                          .bind("data", mapper.writeValueAsString(account))
-                          .mapTo(UUID.class)
-                          .findOnly();
+        final Map<String, Object> resultMap = handle.createQuery("INSERT INTO accounts (" + NUMBER + ", " + UID + ", " + DATA + ") VALUES (:number, :uuid, CAST(:data AS json)) ON CONFLICT(number) DO UPDATE SET " + DATA + " = EXCLUDED.data, " + VERSION + " = accounts.version + 1 RETURNING uuid, version")
+                                                    .bind("number", account.getNumber())
+                                                    .bind("uuid", account.getUuid())
+                                                    .bind("data", mapper.writeValueAsString(account))
+                                                    .mapToMap()
+                                                    .findOnly();
+
+        final UUID uuid = (UUID) resultMap.get(UID);
+        final int version = (int) resultMap.get(VERSION);
 
         boolean isNew = uuid.equals(account.getUuid());
         account.setUuid(uuid);
+        account.setVersion(version);
         return isNew;
       } catch (JsonProcessingException e) {
         throw new IllegalArgumentException(e);
@@ -68,13 +74,23 @@ public class Accounts implements AccountStore {
   }
 
   @Override
-  public void update(Account account) {
+  public void update(Account account) throws ContestedOptimisticLockException {
     database.use(jdbi -> jdbi.useHandle(handle -> {
       try (Timer.Context ignored = updateTimer.time()) {
-        handle.createUpdate("UPDATE accounts SET " + DATA + " = CAST(:data AS json) WHERE " + UID + " = :uuid")
+        final int newVersion = account.getVersion() + 1;
+        int rowsModified = handle.createUpdate("UPDATE accounts SET " + DATA + " = CAST(:data AS json), " + VERSION + " = :newVersion WHERE " + UID + " = :uuid AND " + VERSION + " = :version")
               .bind("uuid", account.getUuid())
               .bind("data", mapper.writeValueAsString(account))
+              .bind("version", account.getVersion())
+              .bind("newVersion", newVersion)
               .execute();
+
+        if (rowsModified == 0) {
+          throw new ContestedOptimisticLockException();
+        }
+
+        account.setVersion(newVersion);
+
       } catch (JsonProcessingException e) {
         throw new IllegalArgumentException(e);
       }
