@@ -39,6 +39,7 @@ import org.whispersystems.textsecuregcm.storage.Accounts;
 import org.whispersystems.textsecuregcm.storage.AccountsDynamoDb;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.AccountsManager.DeletionReason;
+import org.whispersystems.textsecuregcm.storage.DeletedAccounts;
 import org.whispersystems.textsecuregcm.storage.DirectoryManager;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.FaultTolerantDatabase;
@@ -118,6 +119,8 @@ public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfigura
       DynamoDbAsyncClient accountsDynamoDbAsyncClient = DynamoDbFromConfig.asyncClient(configuration.getAccountsDynamoDbConfiguration(),
           software.amazon.awssdk.auth.credentials.InstanceProfileCredentialsProvider.create(),
           accountsDynamoDbMigrationThreadPool);
+      DynamoDbClient deletedAccountsDynamoDbClient = DynamoDbFromConfig.client(configuration.getDeletedAccountsDynamoDbConfiguration(),
+          software.amazon.awssdk.auth.credentials.InstanceProfileCredentialsProvider.create());
 
       FaultTolerantRedisCluster cacheCluster = new FaultTolerantRedisCluster("main_cache_cluster", configuration.getCacheClusterConfiguration(), redisClusterClientResources);
 
@@ -138,6 +141,7 @@ public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfigura
       DynamoDbClient migrationRetryAccountsDynamoDb = DynamoDbFromConfig.client(configuration.getMigrationRetryAccountsDynamoDbConfiguration(),
           software.amazon.awssdk.auth.credentials.InstanceProfileCredentialsProvider.create());
 
+      DeletedAccounts deletedAccounts = Constants.DYNAMO_DB ? new DeletedAccounts(deletedAccountsDynamoDbClient, configuration.getDeletedAccountsDynamoDbConfiguration().getTableName()) : null;
       MigrationDeletedAccounts migrationDeletedAccounts = Constants.DYNAMO_DB ? new MigrationDeletedAccounts(migrationDeletedAccountsDynamoDb, configuration.getMigrationDeletedAccountsDynamoDbConfiguration().getTableName()) : null;
       MigrationRetryAccounts migrationRetryAccounts = Constants.DYNAMO_DB ? new MigrationRetryAccounts(migrationRetryAccountsDynamoDb, configuration.getMigrationRetryAccountsDynamoDbConfiguration().getTableName()) : null;
 
@@ -165,7 +169,7 @@ public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfigura
       ReportMessageDynamoDb     reportMessageDynamoDb = Constants.DYNAMO_DB ? new ReportMessageDynamoDb(reportMessagesDynamoDb, configuration.getReportMessageDynamoDbConfiguration().getTableName()) : null;
       ReportMessageManager      reportMessageManager = new ReportMessageManager(reportMessageDynamoDb, Metrics.globalRegistry);
       MessagesManager           messagesManager      = new MessagesManager(messages, messagesDynamoDb, messagesCache, pushLatencyManager, reportMessageManager);
-      AccountsManager           accountsManager      = new AccountsManager(accounts, accountsDynamoDb, directory, cacheCluster, directoryQueue, keys, keysDynamoDb, messagesManager, usernamesManager, profilesManager, secureStorageClient, secureBackupClient, experimentEnrollmentManager, dynamicConfigurationManager);
+      AccountsManager           accountsManager      = new AccountsManager(accounts, accountsDynamoDb, directory, cacheCluster, deletedAccounts, directoryQueue, keys, keysDynamoDb, messagesManager, usernamesManager, profilesManager, secureStorageClient, secureBackupClient, experimentEnrollmentManager, dynamicConfigurationManager);
 
       for (String user: users) {
         Optional<Account> account = accountsManager.get(user);

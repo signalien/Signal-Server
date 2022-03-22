@@ -72,6 +72,7 @@ public class AccountsManager {
   private final Accounts                  accounts;
   private final AccountsDynamoDb          accountsDynamoDb;
   private final FaultTolerantRedisCluster cacheCluster;
+  private final DeletedAccounts           deletedAccounts;
   private final DirectoryManager          directory;
   private final DirectoryQueue            directoryQueue;
   private final Keys                      keys;
@@ -100,15 +101,19 @@ public class AccountsManager {
     }
   }
 
-  public AccountsManager(Accounts accounts, AccountsDynamoDb accountsDynamoDb, DirectoryManager directory, FaultTolerantRedisCluster cacheCluster, final DirectoryQueue directoryQueue,
+  public AccountsManager(Accounts accounts, AccountsDynamoDb accountsDynamoDb, DirectoryManager directory, FaultTolerantRedisCluster cacheCluster,
+      final DeletedAccounts deletedAccounts,
+      final DirectoryQueue directoryQueue,
       final Keys keys, final KeysDynamoDb keysDynamoDb, final MessagesManager messagesManager, final UsernamesManager usernamesManager,
       final ProfilesManager profilesManager, final SecureStorageClient secureStorageClient,
       final SecureBackupClient secureBackupClient,
-      final ExperimentEnrollmentManager experimentEnrollmentManager, final DynamicConfigurationManager dynamicConfigurationManager) {
+      final ExperimentEnrollmentManager experimentEnrollmentManager,
+      final DynamicConfigurationManager dynamicConfigurationManager) {
     this.accounts            = accounts;
     this.accountsDynamoDb    = accountsDynamoDb;
     this.directory           = directory;
     this.cacheCluster        = cacheCluster;
+    this.deletedAccounts     = deletedAccounts;
     this.directoryQueue      = directoryQueue;
     this.keys                = keys;
     this.keysDynamoDb        = keysDynamoDb;
@@ -275,6 +280,8 @@ public class AccountsManager {
           Metrics.counter(DYNAMO_MIGRATION_ERROR_COUNTER_NAME, "action", "delete").increment();
         }
       }
+
+      if (Constants.DYNAMO_DB) deletedAccounts.put(account.getUuid(), account.getNumber());
 
     } catch (final Exception e) {
       logger.warn("Failed to delete account", e);
