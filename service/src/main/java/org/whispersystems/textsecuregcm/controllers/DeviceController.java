@@ -25,6 +25,7 @@ import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.Device.DeviceCapabilities;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
 import org.whispersystems.textsecuregcm.storage.PendingDevicesManager;
+import org.whispersystems.textsecuregcm.storage.StoredVerificationCodeManager;
 import org.whispersystems.textsecuregcm.util.Constants;
 import org.whispersystems.textsecuregcm.util.Util;
 import org.whispersystems.textsecuregcm.util.VerificationCode;
@@ -56,6 +57,7 @@ public class DeviceController {
 
   private static final int MAX_DEVICES = 6;
 
+//  private final StoredVerificationCodeManager pendingDevices;
   private final PendingDevicesManager pendingDevices;
   private final AccountsManager       accounts;
   private final MessagesManager       messages;
@@ -63,6 +65,7 @@ public class DeviceController {
   private final Map<String, Integer>  maxDeviceConfiguration;
   private final DirectoryQueue        directoryQueue;
 
+//  public DeviceController(StoredVerificationCodeManager pendingDevices,
   public DeviceController(PendingDevicesManager pendingDevices,
                           AccountsManager accounts,
                           MessagesManager messages,

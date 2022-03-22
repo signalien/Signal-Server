@@ -7,7 +7,6 @@ package org.whispersystems.textsecuregcm.storage;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
 import com.codahale.metrics.Timer;
-import com.google.common.annotations.VisibleForTesting;
 import org.whispersystems.textsecuregcm.auth.StoredVerificationCode;
 import org.whispersystems.textsecuregcm.storage.mappers.StoredVerificationCodeRowMapper;
 import org.whispersystems.textsecuregcm.util.Constants;
@@ -16,7 +15,7 @@ import java.util.Optional;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
-public class PendingAccounts implements VerificationCodeStore {
+public class PendingAccounts {
 
   private final MetricRegistry metricRegistry        = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
   private final Timer          insertTimer           = metricRegistry.timer(name(PendingAccounts.class, "insert"          ));
@@ -31,7 +30,6 @@ public class PendingAccounts implements VerificationCodeStore {
     this.database.getDatabase().registerRowMapper(new StoredVerificationCodeRowMapper());
   }
 
-  @Override
   public void insert(final String number, final StoredVerificationCode storedVerificationCode) {
     database.use(jdbi -> jdbi.useHandle(handle -> {
       try (Timer.Context ignored = insertTimer.time()) {
@@ -49,7 +47,6 @@ public class PendingAccounts implements VerificationCodeStore {
     }));
   }
 
-  @Override
   public Optional<StoredVerificationCode> findForNumber(String number) {
     return database.with(jdbi ->jdbi.withHandle(handle -> {
       try (Timer.Context ignored = getCodeForNumberTimer.time()) {
@@ -61,7 +58,6 @@ public class PendingAccounts implements VerificationCodeStore {
     }));
   }
 
-  @Override
   public void remove(String number) {
     database.use(jdbi-> jdbi.useHandle(handle -> {
       try (Timer.Context ignored = removeTimer.time()) {

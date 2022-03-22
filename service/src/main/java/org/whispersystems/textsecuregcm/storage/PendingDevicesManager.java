@@ -5,52 +5,26 @@
 package org.whispersystems.textsecuregcm.storage;
 
 import org.whispersystems.textsecuregcm.auth.StoredVerificationCode;
-import org.whispersystems.textsecuregcm.util.Constants;
 
 import java.util.Optional;
 
 public class PendingDevicesManager {
 
   private final PendingDevices pendingDevices;
-  private final VerificationCodeStoreDynamoDb pendingDevicesDynamoDb;
-  private final DynamicConfigurationManager dynamicConfigurationManager;
 
-  public PendingDevicesManager(
-      final PendingDevices pendingDevices,
-      final VerificationCodeStoreDynamoDb pendingDevicesDynamoDb,
-      final DynamicConfigurationManager dynamicConfigurationManager) {
-
+  public PendingDevicesManager(final PendingDevices pendingDevices) {
     this.pendingDevices = pendingDevices;
-    this.pendingDevicesDynamoDb = pendingDevicesDynamoDb;
-    this.dynamicConfigurationManager = dynamicConfigurationManager;
   }
 
   public void store(String number, StoredVerificationCode code) {
-    switch (dynamicConfigurationManager.getConfiguration().getPendingDevicesMigrationConfiguration().getWriteDestination()) {
-      case POSTGRES:
-        pendingDevices.insert(number, code);
-        break;
-
-      case DYNAMODB:
-        pendingDevicesDynamoDb.insert(number, code);
-        break;
-    }
+    pendingDevices.insert(number, code);
   }
 
   public void remove(String number) {
     pendingDevices.remove(number);
-    if (Constants.DYNAMO_DB) pendingDevicesDynamoDb.remove(number);
   }
 
   public Optional<StoredVerificationCode> getCodeForNumber(String number) {
-    final Optional<StoredVerificationCode> maybeCodeFromPostgres =
-        dynamicConfigurationManager.getConfiguration().getPendingDevicesMigrationConfiguration().isReadPostgres()
-            ? pendingDevices.findForNumber(number)
-            : Optional.empty();
-
-    return maybeCodeFromPostgres.or(
-        () -> dynamicConfigurationManager.getConfiguration().getPendingDevicesMigrationConfiguration().isReadDynamoDb()
-            ? pendingDevicesDynamoDb.findForNumber(number)
-            : Optional.empty());
+    return pendingDevices.findForNumber(number);
   }
 }

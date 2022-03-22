@@ -15,7 +15,7 @@ import java.util.Optional;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
-public class PendingDevices implements VerificationCodeStore {
+public class PendingDevices {
 
   private final MetricRegistry metricRegistry        = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
   private final Timer          insertTimer           = metricRegistry.timer(name(PendingDevices.class, "insert"          ));
@@ -29,7 +29,6 @@ public class PendingDevices implements VerificationCodeStore {
     this.database.getDatabase().registerRowMapper(new StoredVerificationCodeRowMapper());
   }
 
-  @Override
   public void insert(final String number, final StoredVerificationCode storedVerificationCode) {
     database.use(jdbi ->jdbi.useHandle(handle -> {
       try (Timer.Context timer = insertTimer.time()) {
@@ -43,7 +42,6 @@ public class PendingDevices implements VerificationCodeStore {
     }));
   }
 
-  @Override
   public Optional<StoredVerificationCode> findForNumber(String number) {
     return database.with(jdbi -> jdbi.withHandle(handle -> {
       try (Timer.Context timer = getCodeForNumberTimer.time()) {
@@ -55,7 +53,6 @@ public class PendingDevices implements VerificationCodeStore {
     }));
   }
 
-  @Override
   public void remove(String number) {
     database.use(jdbi -> jdbi.useHandle(handle -> {
       try (Timer.Context timer = removeTimer.time()) {
@@ -65,5 +62,4 @@ public class PendingDevices implements VerificationCodeStore {
       }
     }));
   }
-
 }

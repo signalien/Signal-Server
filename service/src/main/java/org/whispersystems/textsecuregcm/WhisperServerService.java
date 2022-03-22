@@ -185,9 +185,10 @@ import org.whispersystems.textsecuregcm.storage.RemoteConfigsManager;
 import org.whispersystems.textsecuregcm.storage.ReportMessageDynamoDb;
 import org.whispersystems.textsecuregcm.storage.ReportMessageManager;
 import org.whispersystems.textsecuregcm.storage.ReservedUsernames;
+import org.whispersystems.textsecuregcm.storage.StoredVerificationCodeManager;
 import org.whispersystems.textsecuregcm.storage.Usernames;
 import org.whispersystems.textsecuregcm.storage.UsernamesManager;
-import org.whispersystems.textsecuregcm.storage.VerificationCodeStoreDynamoDb;
+import org.whispersystems.textsecuregcm.storage.VerificationCodeStore;
 import org.whispersystems.textsecuregcm.util.AsnManager;
 import org.whispersystems.textsecuregcm.util.Constants;
 import org.whispersystems.textsecuregcm.util.DynamoDbFromConfig;
@@ -381,8 +382,8 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     RemoteConfigs     remoteConfigs     = new RemoteConfigs(accountDatabase);
     PushChallengeDynamoDb pushChallengeDynamoDb = Constants.DYNAMO_DB ? new PushChallengeDynamoDb(pushChallengeDynamoDbClient, config.getPushChallengeDynamoDbConfiguration().getTableName()) : null;
     ReportMessageDynamoDb reportMessageDynamoDb = Constants.DYNAMO_DB ? new ReportMessageDynamoDb(reportMessageDynamoDbClient, config.getReportMessageDynamoDbConfiguration().getTableName()) : null;
-    VerificationCodeStoreDynamoDb pendingAccountsDynamoDb = Constants.DYNAMO_DB ? new VerificationCodeStoreDynamoDb(pendingAccountsDynamoDbClient, config.getPendingAccountsDynamoDbConfiguration().getTableName()) : null;
-    VerificationCodeStoreDynamoDb pendingDevicesDynamoDb = Constants.DYNAMO_DB ? new VerificationCodeStoreDynamoDb(pendingDevicesDynamoDbClient, config.getPendingDevicesDynamoDbConfiguration().getTableName()) : null;
+    VerificationCodeStore pendingAccountsDynamoDb = new VerificationCodeStore(pendingAccountsDynamoDbClient, config.getPendingAccountsDynamoDbConfiguration().getTableName());
+    VerificationCodeStore pendingDevicesDynamoDb = new VerificationCodeStore(pendingDevicesDynamoDbClient, config.getPendingDevicesDynamoDbConfiguration().getTableName());
 
     RedisClientFactory  pubSubClientFactory = new RedisClientFactory("pubsub_cache", config.getPubsubCacheConfiguration().getUrl(), config.getPubsubCacheConfiguration().getReplicaUrls(), config.getPubsubCacheConfiguration().getCircuitBreakerConfiguration());
     ReplicatedJedisPool pubsubClient        = pubSubClientFactory.getRedisClientPool();
@@ -443,8 +444,10 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     ClientPresenceManager      clientPresenceManager      = new ClientPresenceManager(clientPresenceCluster, recurringJobExecutor, keyspaceNotificationDispatchExecutor);
     DirectoryManager           directory                  = new DirectoryManager(directoryClient);
     DirectoryQueue             directoryQueue             = new DirectoryQueue(config.getDirectoryConfiguration().getSqsConfiguration());
-    PendingAccountsManager     pendingAccountsManager     = new PendingAccountsManager(pendingAccounts, pendingAccountsDynamoDb, dynamicConfigurationManager);
-    PendingDevicesManager      pendingDevicesManager      = new PendingDevicesManager(pendingDevices, pendingDevicesDynamoDb, dynamicConfigurationManager);
+//    StoredVerificationCodeManager pendingAccountsManager  = new StoredVerificationCodeManager(pendingAccountsDynamoDb);
+//    StoredVerificationCodeManager pendingDevicesManager   = new StoredVerificationCodeManager(pendingDevicesDynamoDb);
+    PendingAccountsManager     pendingAccountsManager     = new PendingAccountsManager(pendingAccounts);
+    PendingDevicesManager      pendingDevicesManager      = new PendingDevicesManager(pendingDevices);
     UsernamesManager           usernamesManager           = new UsernamesManager(usernames, reservedUsernames, cacheCluster);
     ProfilesManager            profilesManager            = new ProfilesManager(profiles, cacheCluster);
     MessagesCache              messagesCache              = new MessagesCache(messagesCluster, messagesCluster, keyspaceNotificationDispatchExecutor);

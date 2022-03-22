@@ -77,6 +77,7 @@ import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
 import org.whispersystems.textsecuregcm.storage.PendingAccountsManager;
+import org.whispersystems.textsecuregcm.storage.StoredVerificationCodeManager;
 import org.whispersystems.textsecuregcm.storage.UsernamesManager;
 import org.whispersystems.textsecuregcm.util.Constants;
 import org.whispersystems.textsecuregcm.util.ForwardedIpUtil;
@@ -112,6 +113,7 @@ public class AccountController {
 
   private static final String VERIFY_EXPERIMENT_TAG_NAME = "twilioVerify";
 
+//  private final StoredVerificationCodeManager      pendingAccounts;
   private final PendingAccountsManager             pendingAccounts;
   private final AccountsManager                    accounts;
   private final UsernamesManager                   usernames;
@@ -130,6 +132,7 @@ public class AccountController {
 
   private final TwilioVerifyExperimentEnrollmentManager verifyExperimentEnrollmentManager;
 
+//  public AccountController(StoredVerificationCodeManager pendingAccounts,
   public AccountController(PendingAccountsManager pendingAccounts,
                            AccountsManager accounts,
                            UsernamesManager usernames,
