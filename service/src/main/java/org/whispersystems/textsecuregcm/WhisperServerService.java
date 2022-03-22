@@ -153,6 +153,9 @@ import org.whispersystems.textsecuregcm.storage.AccountsDynamoDbMigrator;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.ActiveUserCounter;
 import org.whispersystems.textsecuregcm.storage.DeletedAccounts;
+import org.whispersystems.textsecuregcm.storage.DeletedAccountsDirectoryReconciler;
+import org.whispersystems.textsecuregcm.storage.DeletedAccountsTableCrawler;
+import org.whispersystems.textsecuregcm.storage.DeletedAccountsTableCrawlerCache;
 import org.whispersystems.textsecuregcm.storage.DirectoryManager;
 import org.whispersystems.textsecuregcm.storage.DirectoryReconciler;
 import org.whispersystems.textsecuregcm.storage.DirectoryReconciliationClient;
@@ -480,6 +483,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
 
     MessagePersister messagePersister = new MessagePersister(messagesCache, messagesManager, accountsManager, dynamicConfigurationManager, Duration.ofMinutes(config.getMessageCacheConfiguration().getPersistDelayMinutes()));
 
+    final List<DeletedAccountsDirectoryReconciler> deletedAccountsDirectoryReconcilers = new ArrayList<>();
     final List<AccountDatabaseCrawlerListener> accountDatabaseCrawlerListeners = new ArrayList<>();
     accountDatabaseCrawlerListeners.add(new PushFeedbackProcessor(accountsManager, directoryQueue));
     accountDatabaseCrawlerListeners.add(new ActiveUserCounter(config.getMetricsFactory(), cacheCluster));
@@ -487,6 +491,9 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
       final DirectoryReconciliationClient directoryReconciliationClient = new DirectoryReconciliationClient(directoryServerConfiguration);
       final DirectoryReconciler directoryReconciler = new DirectoryReconciler(directoryServerConfiguration.getReplicationName(), directoryServerConfiguration.isReplicationPrimary(), directoryReconciliationClient, directory);
       accountDatabaseCrawlerListeners.add(directoryReconciler);
+
+      final DeletedAccountsDirectoryReconciler deletedAccountsDirectoryReconciler = new DeletedAccountsDirectoryReconciler(directoryServerConfiguration.getReplicationName(), directoryReconciliationClient);
+      deletedAccountsDirectoryReconcilers.add(deletedAccountsDirectoryReconciler);
     }
     accountDatabaseCrawlerListeners.add(new AccountCleaner(accountsManager));
     accountDatabaseCrawlerListeners.add(new RegistrationLockVersionCounter(metricsCluster, config.getMetricsFactory()));
@@ -500,11 +507,15 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     AccountDatabaseCrawlerCache accountDatabaseCrawlerCache = new AccountDatabaseCrawlerCache(cacheCluster);
     AccountDatabaseCrawler      accountDatabaseCrawler      = new AccountDatabaseCrawler(accountsManager, accountDatabaseCrawlerCache, accountDatabaseCrawlerListeners, config.getAccountDatabaseCrawlerConfiguration().getChunkSize(), config.getAccountDatabaseCrawlerConfiguration().getChunkIntervalMs());
 
+    DeletedAccountsTableCrawlerCache deletedAccountsTableCrawlerCache = new DeletedAccountsTableCrawlerCache(cacheCluster);
+    DeletedAccountsTableCrawler deletedAccountsTableCrawler = new DeletedAccountsTableCrawler(deletedAccounts, deletedAccountsTableCrawlerCache, deletedAccountsDirectoryReconcilers);
+
     apnSender.setApnFallbackManager(apnFallbackManager);
     environment.lifecycle().manage(apnFallbackManager);
     environment.lifecycle().manage(pubSubManager);
     environment.lifecycle().manage(messageSender);
     environment.lifecycle().manage(accountDatabaseCrawler);
+//    environment.lifecycle().manage(deletedAccountsTableCrawler);
     environment.lifecycle().manage(remoteConfigsManager);
     environment.lifecycle().manage(messagesCache);
     environment.lifecycle().manage(messagePersister);
