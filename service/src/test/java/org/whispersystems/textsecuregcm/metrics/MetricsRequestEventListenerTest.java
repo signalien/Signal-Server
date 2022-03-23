@@ -42,7 +42,6 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import java.nio.ByteBuffer;
 import java.security.Principal;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -55,8 +54,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyIterable;
-import static org.mockito.ArgumentMatchers.anyVararg;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -122,18 +119,6 @@ public class MetricsRequestEventListenerTest {
         assertTrue(tags.contains(Tag.of(MetricsRequestEventListener.TRAFFIC_SOURCE_TAG, TRAFFIC_SOURCE.name().toLowerCase())));
         assertTrue(tags.contains(Tag.of(UserAgentTagUtil.PLATFORM_TAG, "android")));
         // assertTrue(tags.contains(Tag.of(UserAgentTagUtil.VERSION_TAG, "4.53.7")));
-    }
-
-    @Test
-    public void testGetPathTemplate() {
-        final UriTemplate firstComponent = new UriTemplate("/first");
-        final UriTemplate secondComponent = new UriTemplate("/second");
-        final UriTemplate thirdComponent = new UriTemplate("/{param}/{moreDifferentParam}");
-
-        final ExtendedUriInfo uriInfo = mock(ExtendedUriInfo.class);
-        when(uriInfo.getMatchedTemplates()).thenReturn(Arrays.asList(thirdComponent, secondComponent, firstComponent));
-
-        assertEquals("/first/second/{param}/{moreDifferentParam}", MetricsRequestEventListener.getPathTemplate(uriInfo));
     }
 
     @Test
