@@ -112,7 +112,7 @@ public class DeviceController {
     account = accounts.update(account, a -> a.removeDevice(deviceId));
     // ensure any messages that came in after the first clear() are also removed
     if (Constants.DYNAMO_DB) {
-      keys.delete(account, deviceId);
+      keys.delete(account.getUuid(), deviceId);
       messages.clear(account.getUuid(), deviceId);
     } else {
       keysLegacy.delete(account, deviceId);

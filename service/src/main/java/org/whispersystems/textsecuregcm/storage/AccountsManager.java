@@ -232,7 +232,7 @@ public class AccountsManager {
       maybeExistingAccount.ifPresent(definitelyExistingAccount -> {
         if (Constants.DYNAMO_DB) {
           messagesManager.clear(definitelyExistingAccount.getUuid());
-          keysDynamoDb.delete(definitelyExistingAccount);
+          keysDynamoDb.delete(definitelyExistingAccount.getUuid());
         } else {
           messagesManager.clear(number, definitelyExistingAccount.getUuid());
           keys.delete(definitelyExistingAccount);
@@ -410,7 +410,7 @@ public class AccountsManager {
       directory.remove(account.getNumber());
       profilesManager.deleteAll(account.getUuid());
       if (Constants.DYNAMO_DB) {
-        keysDynamoDb.delete(account);
+        keysDynamoDb.delete(account.getUuid());
         messagesManager.clear(account.getUuid());
       } else {
         keys.delete(account);
