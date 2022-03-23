@@ -84,7 +84,8 @@ public class BaseAccountAuthenticator {
       if (device.get().getAuthenticationCredentials().verify(basicCredentials.getPassword())) {
         succeeded = true;
         final Account authenticatedAccount = updateLastSeen(account.get(), device.get());
-        authenticatedAccount.setAuthenticatedDevice(device.get());
+        // the device in scope might be stale after the update, so get the latest from the authenticated account
+        authenticatedAccount.setAuthenticatedDevice(authenticatedAccount.getDevice(device.get().getId()).orElseThrow());
         return Optional.of(authenticatedAccount);
       }
 
@@ -119,7 +120,7 @@ public class BaseAccountAuthenticator {
           .record(Duration.ofMillis(todayInMillisWithOffset - device.getLastSeen()).toDays());
 
       device.setLastSeen(Util.todayInMillis(clock));
-      return accountsManager.updateDevice(account, device.getId(), d -> d.setLastSeen(Util.todayInMillis(clock)));
+      return accountsManager.updateDeviceLastSeen(account, device, Util.todayInMillis(clock));
     }
 
     return account;
