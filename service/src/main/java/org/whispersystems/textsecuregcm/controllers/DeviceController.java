@@ -67,7 +67,6 @@ public class DeviceController {
   private final KeysDynamoDb          keys;
   private final RateLimiters          rateLimiters;
   private final Map<String, Integer>  maxDeviceConfiguration;
-  private final DirectoryQueue        directoryQueue;
 
 //  public DeviceController(StoredVerificationCodeManager pendingDevices,
   public DeviceController(PendingDevicesManager pendingDevices,
@@ -75,7 +74,6 @@ public class DeviceController {
                           MessagesManager messages,
                           Keys keysLegacy,
                           KeysDynamoDb keys,
-                          DirectoryQueue directoryQueue,
                           RateLimiters rateLimiters,
                           Map<String, Integer> maxDeviceConfiguration)
   {
@@ -84,7 +82,6 @@ public class DeviceController {
     this.messages               = messages;
     this.keysLegacy             = keysLegacy;
     this.keys                   = keys;
-    this.directoryQueue         = directoryQueue;
     this.rateLimiters           = rateLimiters;
     this.maxDeviceConfiguration = maxDeviceConfiguration;
   }
@@ -113,7 +110,6 @@ public class DeviceController {
 
     messages.clear(account.getUuid(), deviceId);
     account = accounts.update(account, a -> a.removeDevice(deviceId));
-    directoryQueue.refreshRegisteredUser(account);
     // ensure any messages that came in after the first clear() are also removed
     if (Constants.DYNAMO_DB) {
       keys.delete(account, deviceId);

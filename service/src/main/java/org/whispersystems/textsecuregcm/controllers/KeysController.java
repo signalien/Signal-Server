@@ -41,7 +41,6 @@ import org.whispersystems.textsecuregcm.limits.PreKeyRateLimiter;
 import org.whispersystems.textsecuregcm.limits.RateLimitChallengeException;
 import org.whispersystems.textsecuregcm.limits.RateLimitChallengeManager;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
-import org.whispersystems.textsecuregcm.sqs.DirectoryQueue;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
@@ -60,7 +59,6 @@ public class KeysController {
   private final Keys                        keys;
   private final KeysDynamoDb                keysDynamoDb;
   private final AccountsManager             accounts;
-  private final DirectoryQueue              directoryQueue;
   private final PreKeyRateLimiter           preKeyRateLimiter;
 
   private final DynamicConfigurationManager dynamicConfigurationManager;
@@ -74,14 +72,13 @@ public class KeysController {
   private static final String PREKEY_TARGET_IDENTIFIER_TAG_NAME =  "identifierType";
 
   public KeysController(RateLimiters rateLimiters, Keys keys, KeysDynamoDb keysDynamoDb, AccountsManager accounts,
-      DirectoryQueue directoryQueue, PreKeyRateLimiter preKeyRateLimiter,
+      PreKeyRateLimiter preKeyRateLimiter,
       DynamicConfigurationManager dynamicConfigurationManager,
       RateLimitChallengeManager rateLimitChallengeManager) {
     this.rateLimiters                = rateLimiters;
     this.keys                        = keys;
     this.keysDynamoDb                = keysDynamoDb;
     this.accounts                    = accounts;
-    this.directoryQueue              = directoryQueue;
     this.preKeyRateLimiter           = preKeyRateLimiter;
 
     this.dynamicConfigurationManager = dynamicConfigurationManager;
@@ -107,7 +104,6 @@ public class KeysController {
   public void setKeys(@Auth DisabledPermittedAccount disabledPermittedAccount, @Valid PreKeyState preKeys)  {
     Account account           = disabledPermittedAccount.getAccount();
     Device  device            = account.getAuthenticatedDevice().get();
-    boolean wasAccountEnabled = account.isEnabled();
     boolean updateAccount     = false;
 
     if (!preKeys.getSignedPreKey().equals(device.getSignedPreKey())) {
@@ -123,10 +119,6 @@ public class KeysController {
         a.getDevice(device.getId()).ifPresent(d -> d.setSignedPreKey(preKeys.getSignedPreKey()));
         a.setIdentityKey(preKeys.getIdentityKey());
       });
-
-      if (!wasAccountEnabled && account.isEnabled()) {
-        directoryQueue.refreshRegisteredUser(account);
-      }
     }
 
     if (Constants.DYNAMO_DB) {
@@ -209,14 +201,9 @@ public class KeysController {
   @Path("/signed")
   @Consumes(MediaType.APPLICATION_JSON)
   public void setSignedKey(@Auth Account account, @Valid SignedPreKey signedPreKey) {
-    Device  device            = account.getAuthenticatedDevice().get();
-    boolean wasAccountEnabled = account.isEnabled();
+    Device device = account.getAuthenticatedDevice().get();
 
-    account = accounts.updateDevice(account, device.getId(), d -> d.setSignedPreKey(signedPreKey));
-
-    if (!wasAccountEnabled && account.isEnabled()) {
-      directoryQueue.refreshRegisteredUser(account);
-    }
+    accounts.updateDevice(account, device.getId(), d -> d.setSignedPreKey(signedPreKey));
   }
 
   @Timed

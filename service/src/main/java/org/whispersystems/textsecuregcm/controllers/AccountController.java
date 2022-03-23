@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import javax.validation.Valid;
@@ -68,16 +67,12 @@ import org.whispersystems.textsecuregcm.push.GcmMessage;
 import org.whispersystems.textsecuregcm.recaptcha.RecaptchaClient;
 import org.whispersystems.textsecuregcm.sms.SmsSender;
 import org.whispersystems.textsecuregcm.sms.TwilioVerifyExperimentEnrollmentManager;
-import org.whispersystems.textsecuregcm.sqs.DirectoryQueue;
 import org.whispersystems.textsecuregcm.storage.AbusiveHostRule;
 import org.whispersystems.textsecuregcm.storage.AbusiveHostRules;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
-import org.whispersystems.textsecuregcm.storage.Keys;
-import org.whispersystems.textsecuregcm.storage.KeysDynamoDb;
-import org.whispersystems.textsecuregcm.storage.MessagesManager;
 import org.whispersystems.textsecuregcm.storage.PendingAccountsManager;
 import org.whispersystems.textsecuregcm.storage.StoredVerificationCodeManager;
 import org.whispersystems.textsecuregcm.storage.UsernamesManager;
@@ -93,7 +88,6 @@ public class AccountController {
 
   private final Logger         logger                 = LoggerFactory.getLogger(AccountController.class);
   private final MetricRegistry metricRegistry         = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
-  private final Meter          newUserMeter           = metricRegistry.meter(name(AccountController.class, "brand_new_user"     ));
   private final Meter          blockedHostMeter       = metricRegistry.meter(name(AccountController.class, "blocked_host"       ));
   private final Meter          filteredHostMeter      = metricRegistry.meter(name(AccountController.class, "filtered_host"      ));
   private final Meter          rateLimitedHostMeter   = metricRegistry.meter(name(AccountController.class, "rate_limited_host"  ));
@@ -122,10 +116,6 @@ public class AccountController {
   private final AbusiveHostRules                   abusiveHostRules;
   private final RateLimiters                       rateLimiters;
   private final SmsSender                          smsSender;
-  private final DirectoryQueue                     directoryQueue;
-  private final MessagesManager                    messagesManager;
-  private final Keys                               keysLegacy;
-  private final KeysDynamoDb                       keys;
   private final DynamicConfigurationManager        dynamicConfigurationManager;
   private final TurnTokenGenerator                 turnTokenGenerator;
   private final Map<String, Integer>               testDevices;
@@ -143,10 +133,6 @@ public class AccountController {
                            AbusiveHostRules abusiveHostRules,
                            RateLimiters rateLimiters,
                            SmsSender smsSenderFactory,
-                           DirectoryQueue directoryQueue,
-                           MessagesManager messagesManager,
-                           Keys keysLegacy,
-                           KeysDynamoDb keys,
                            DynamicConfigurationManager dynamicConfigurationManager,
                            TurnTokenGenerator turnTokenGenerator,
                            Map<String, Integer> testDevices,
@@ -162,10 +148,6 @@ public class AccountController {
     this.abusiveHostRules                  = abusiveHostRules;
     this.rateLimiters                      = rateLimiters;
     this.smsSender                         = smsSenderFactory;
-    this.directoryQueue                    = directoryQueue;
-    this.messagesManager                   = messagesManager;
-    this.keysLegacy                        = keysLegacy;
-    this.keys                              = keys;
     this.dynamicConfigurationManager       = dynamicConfigurationManager;
     this.testDevices                       = testDevices;
     this.turnTokenGenerator                = turnTokenGenerator;
@@ -325,6 +307,7 @@ public class AccountController {
       });
     });
 
+    // TODO Remove this meter when external dependencies have been resolved
     metricRegistry.meter(name(AccountController.class, "create", Util.getCountryCode(number))).mark();
 
     {
@@ -399,7 +382,7 @@ public class AccountController {
         throw new WebApplicationException(Response.status(409).build());
       }
 
-      Account account = createAccount(number, password, signalAgent, accountAttributes);
+      Account account = accounts.create(number, password, signalAgent, accountAttributes);
 
       {
         metricRegistry.meter(name(AccountController.class, "verify", Util.getCountryCode(number))).mark();
@@ -438,7 +421,6 @@ public class AccountController {
   public void setGcmRegistrationId(@Auth DisabledPermittedAccount disabledPermittedAccount, @Valid GcmRegistrationId registrationId) {
     Account account           = disabledPermittedAccount.getAccount();
     Device  device            = account.getAuthenticatedDevice().get();
-    boolean wasAccountEnabled = account.isEnabled();
 
     if (device.getGcmId() != null &&
         device.getGcmId().equals(registrationId.getGcmRegistrationId()))
@@ -446,16 +428,12 @@ public class AccountController {
       return;
     }
 
-    account = accounts.updateDevice(account, device.getId(), d -> {
+    accounts.updateDevice(account, device.getId(), d -> {
       d.setApnId(null);
       d.setVoipApnId(null);
       d.setGcmId(registrationId.getGcmRegistrationId());
       d.setFetchesMessages(false);
     });
-
-    if (!wasAccountEnabled && account.isEnabled()) {
-      directoryQueue.refreshRegisteredUser(account);
-    }
   }
 
   @Timed
@@ -465,12 +443,11 @@ public class AccountController {
     Account account = disabledPermittedAccount.getAccount();
     Device  device  = account.getAuthenticatedDevice().get();
 
-    account = accounts.updateDevice(account, device.getId(), d -> {
+    accounts.updateDevice(account, device.getId(), d -> {
       d.setGcmId(null);
       d.setFetchesMessages(false);
       d.setUserAgent("OWA");
     });
-    directoryQueue.refreshRegisteredUser(account);
   }
 
   @Timed
@@ -480,7 +457,6 @@ public class AccountController {
   public void setApnRegistrationId(@Auth DisabledPermittedAccount disabledPermittedAccount, @Valid ApnRegistrationId registrationId) {
     Account account           = disabledPermittedAccount.getAccount();
     Device  device            = account.getAuthenticatedDevice().get();
-    boolean wasAccountEnabled = account.isEnabled();
 
     account = accounts.updateDevice(account, device.getId(), d -> {
       d.setApnId(registrationId.getApnRegistrationId());
@@ -488,10 +464,6 @@ public class AccountController {
       d.setGcmId(null);
       d.setFetchesMessages(false);
     });
-
-    if (!wasAccountEnabled && account.isEnabled()) {
-      directoryQueue.refreshRegisteredUser(account);
-    }
   }
 
   @Timed
@@ -510,7 +482,6 @@ public class AccountController {
         d.setUserAgent("OWP");
       }
     });
-    directoryQueue.refreshRegisteredUser(account);
   }
 
   @Timed
@@ -583,7 +554,7 @@ public class AccountController {
     Account account = disabledPermittedAccount.getAccount();
     long deviceId = account.getAuthenticatedDevice().get().getId();
 
-    account = accounts.update(account, a-> {
+    accounts.update(account, a-> {
 
       a.getDevice(deviceId).ifPresent(d -> {
         d.setFetchesMessages(attributes.getFetchesMessages());
@@ -594,19 +565,12 @@ public class AccountController {
         d.setUserAgent(userAgent);
       });
 
-      setAccountRegistrationLockFromAttributes(a, attributes);
+      a.setRegistrationLockFromAttributes(attributes);
 
       a.setUnidentifiedAccessKey(attributes.getUnidentifiedAccessKey());
       a.setUnrestrictedUnidentifiedAccess(attributes.isUnrestrictedUnidentifiedAccess());
       a.setDiscoverableByPhoneNumber(attributes.isDiscoverableByPhoneNumber());
-
     });
-
-    final boolean hasDiscoverabilityChange = (account.isDiscoverableByPhoneNumber() != attributes.isDiscoverableByPhoneNumber());
-
-    if (hasDiscoverabilityChange) {
-      directoryQueue.refreshRegisteredUser(account);
-    }
   }
 
   @GET
@@ -756,60 +720,6 @@ public class AccountController {
     }
 
     return false;
-  }
-
-  private Account createAccount(String number, String password, String signalAgent, AccountAttributes accountAttributes) {
-    Optional<Account> maybeExistingAccount = accounts.get(number);
-
-    Device device = new Device();
-    device.setId(Device.MASTER_ID);
-    device.setAuthenticationCredentials(new AuthenticationCredentials(password));
-    device.setFetchesMessages(accountAttributes.getFetchesMessages());
-    device.setRegistrationId(accountAttributes.getRegistrationId());
-    device.setName(accountAttributes.getName());
-    device.setCapabilities(accountAttributes.getCapabilities());
-    device.setCreated(System.currentTimeMillis());
-    device.setLastSeen(Util.todayInMillis());
-    device.setUserAgent(signalAgent);
-
-    Account account = new Account();
-    account.setNumber(number);
-    account.setUuid(UUID.randomUUID());
-    account.addDevice(device);
-    setAccountRegistrationLockFromAttributes(account, accountAttributes);
-    account.setUnidentifiedAccessKey(accountAttributes.getUnidentifiedAccessKey());
-    account.setUnrestrictedUnidentifiedAccess(accountAttributes.isUnrestrictedUnidentifiedAccess());
-    account.setDiscoverableByPhoneNumber(accountAttributes.isDiscoverableByPhoneNumber());
-
-    if (accounts.create(account)) {
-      newUserMeter.mark();
-    }
-
-    directoryQueue.refreshRegisteredUser(account);
-    maybeExistingAccount.ifPresent(definitelyExistingAccount -> {
-      if (Constants.DYNAMO_DB) {
-        messagesManager.clear(definitelyExistingAccount.getUuid());
-        keys.delete(definitelyExistingAccount);
-      } else {
-        keysLegacy.delete(definitelyExistingAccount);
-        messagesManager.clear(number, definitelyExistingAccount.getUuid());
-      }
-    });
-    pendingAccounts.remove(number);
-
-    return account;
-  }
-
-  private void setAccountRegistrationLockFromAttributes(Account account, @Valid AccountAttributes attributes) {
-    if (!Util.isEmpty(attributes.getPin())) {
-      account.setPin(attributes.getPin());
-    } else if (!Util.isEmpty(attributes.getRegistrationLock())) {
-      AuthenticationCredentials credentials = new AuthenticationCredentials(attributes.getRegistrationLock());
-      account.setRegistrationLock(credentials.getHashedAuthenticationToken(), credentials.getSalt());
-    } else {
-      account.setPin(null);
-      account.setRegistrationLock(null, null);
-    }
   }
 
   @VisibleForTesting protected
