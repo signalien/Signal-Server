@@ -231,6 +231,7 @@ public class AccountsManager {
           if (!originalUuid.equals(actualUuid)) {
             messagesManager.clear(actualUuid);
             keysDynamoDb.delete(actualUuid);
+            profilesManager.deleteAll(actualUuid);
           }
 
           final Tags tags;
@@ -297,6 +298,7 @@ public class AccountsManager {
         maybeExistingAccount.ifPresent(definitelyExistingAccount -> {
           messagesManager.clear(number, definitelyExistingAccount.getUuid());
           keys.delete(definitelyExistingAccount);
+          profilesManager.deleteAll(definitelyExistingAccount.getUuid());
         });
 
         pendingAccounts.remove(number);
