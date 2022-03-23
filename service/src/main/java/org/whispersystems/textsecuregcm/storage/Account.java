@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2020 Signal Messenger, LLC
+ * Copyright 2013-2021 Signal Messenger, LLC
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 package org.whispersystems.textsecuregcm.storage;
@@ -326,7 +326,7 @@ public class Account implements Principal  {
 
     return new StoredRegistrationLock(Optional.ofNullable(registrationLock), Optional.ofNullable(registrationLockSalt), getLastSeen());
   }
-  
+
   public Optional<byte[]> getUnidentifiedAccessKey() {
     requireNotStale();
 
@@ -369,6 +369,12 @@ public class Account implements Principal  {
     requireNotStale();
 
     this.discoverableByPhoneNumber = discoverableByPhoneNumber;
+  }
+
+  public boolean shouldBeVisibleInDirectory() {
+    requireNotStale();
+
+    return isEnabled() && isDiscoverableByPhoneNumber();
   }
 
   public int getVersion() {

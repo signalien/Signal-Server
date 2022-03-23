@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2020 Signal Messenger, LLC
+ * Copyright 2013-2021 Signal Messenger, LLC
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 package org.whispersystems.textsecuregcm.storage;
@@ -309,7 +309,7 @@ public class AccountsManager {
 
   public Account update(Account account, Consumer<Account> updater) {
 
-    final boolean wasDiscoverableBeforeUpdate = directoryQueue.isDiscoverable(account);
+    final boolean wasVisibleBeforeUpdate = account.shouldBeVisibleInDirectory();
 
     final Account updatedAccount;
 
@@ -354,9 +354,9 @@ public class AccountsManager {
       updateDirectory(updatedAccount);
     }
 
-    final boolean isDiscoverableAfterUpdate = directoryQueue.isDiscoverable(updatedAccount);
+    final boolean isVisibleAfterUpdate = updatedAccount.shouldBeVisibleInDirectory();
 
-    if (wasDiscoverableBeforeUpdate != isDiscoverableAfterUpdate) {
+    if (wasVisibleBeforeUpdate != isVisibleAfterUpdate) {
       directoryQueue.refreshAccount(updatedAccount);
     }
 
