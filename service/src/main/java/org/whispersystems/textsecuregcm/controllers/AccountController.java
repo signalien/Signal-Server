@@ -75,6 +75,8 @@ import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
+import org.whispersystems.textsecuregcm.storage.Keys;
+import org.whispersystems.textsecuregcm.storage.KeysDynamoDb;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
 import org.whispersystems.textsecuregcm.storage.PendingAccountsManager;
 import org.whispersystems.textsecuregcm.storage.StoredVerificationCodeManager;
@@ -122,6 +124,8 @@ public class AccountController {
   private final SmsSender                          smsSender;
   private final DirectoryQueue                     directoryQueue;
   private final MessagesManager                    messagesManager;
+  private final Keys                               keysLegacy;
+  private final KeysDynamoDb                       keys;
   private final DynamicConfigurationManager        dynamicConfigurationManager;
   private final TurnTokenGenerator                 turnTokenGenerator;
   private final Map<String, Integer>               testDevices;
@@ -141,6 +145,8 @@ public class AccountController {
                            SmsSender smsSenderFactory,
                            DirectoryQueue directoryQueue,
                            MessagesManager messagesManager,
+                           Keys keysLegacy,
+                           KeysDynamoDb keys,
                            DynamicConfigurationManager dynamicConfigurationManager,
                            TurnTokenGenerator turnTokenGenerator,
                            Map<String, Integer> testDevices,
@@ -158,6 +164,8 @@ public class AccountController {
     this.smsSender                         = smsSenderFactory;
     this.directoryQueue                    = directoryQueue;
     this.messagesManager                   = messagesManager;
+    this.keysLegacy                        = keysLegacy;
+    this.keys                              = keys;
     this.dynamicConfigurationManager       = dynamicConfigurationManager;
     this.testDevices                       = testDevices;
     this.turnTokenGenerator                = turnTokenGenerator;
@@ -782,11 +790,15 @@ public class AccountController {
     }
 
     directoryQueue.refreshRegisteredUser(account);
-    if (Constants.DYNAMO_DB) {
-      maybeExistingAccount.ifPresent(definitelyExistingAccount -> messagesManager.clear(definitelyExistingAccount.getUuid()));
-    } else {
-      messagesManager.clear(number, maybeExistingAccount.map(Account::getUuid).orElse(null));
-    }
+    maybeExistingAccount.ifPresent(definitelyExistingAccount -> {
+      if (Constants.DYNAMO_DB) {
+        messagesManager.clear(definitelyExistingAccount.getUuid());
+        keys.delete(definitelyExistingAccount);
+      } else {
+        keysLegacy.delete(definitelyExistingAccount);
+        messagesManager.clear(number, definitelyExistingAccount.getUuid());
+      }
+    });
     pendingAccounts.remove(number);
 
     return account;
