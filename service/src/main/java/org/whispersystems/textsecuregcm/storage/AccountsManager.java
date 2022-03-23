@@ -43,7 +43,6 @@ import org.whispersystems.textsecuregcm.sqs.DirectoryQueue;
 import org.whispersystems.textsecuregcm.util.Constants;
 import org.whispersystems.textsecuregcm.util.SystemMapper;
 import org.whispersystems.textsecuregcm.util.Util;
-import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
 
 public class AccountsManager {
 
@@ -73,7 +72,7 @@ public class AccountsManager {
   private final Accounts                  accounts;
   private final AccountsDynamoDb          accountsDynamoDb;
   private final FaultTolerantRedisCluster cacheCluster;
-  private final DeletedAccounts           deletedAccounts;
+  private final DeletedAccountsManager    deletedAccountsManager;
   private final DirectoryManager          directory;
   private final DirectoryQueue            directoryQueue;
   private final Keys                      keys;
@@ -103,7 +102,7 @@ public class AccountsManager {
   }
 
   public AccountsManager(Accounts accounts, AccountsDynamoDb accountsDynamoDb, DirectoryManager directory, FaultTolerantRedisCluster cacheCluster,
-      final DeletedAccounts deletedAccounts,
+      final DeletedAccountsManager deletedAccountsManager,
       final DirectoryQueue directoryQueue,
       final Keys keys, final KeysDynamoDb keysDynamoDb, final MessagesManager messagesManager, final UsernamesManager usernamesManager,
       final ProfilesManager profilesManager, final SecureStorageClient secureStorageClient,
@@ -114,7 +113,7 @@ public class AccountsManager {
     this.accountsDynamoDb    = accountsDynamoDb;
     this.directory           = directory;
     this.cacheCluster        = cacheCluster;
-    this.deletedAccounts     = deletedAccounts;
+    this.deletedAccountsManager = deletedAccountsManager;
     this.directoryQueue      = directoryQueue;
     this.keys                = keys;
     this.keysDynamoDb        = keysDynamoDb;
@@ -323,7 +322,7 @@ public class AccountsManager {
     return accountsDynamoDb.getAllFrom(uuid, length, maxPageSize);
   }
 
-  public void delete(final Account account, final DeletionReason deletionReason) {
+  public void delete(final Account account, final DeletionReason deletionReason) throws InterruptedException {
     try (final Timer.Context ignored = deleteTimer.time()) {
       final CompletableFuture<Void> deleteStorageServiceDataFuture = secureStorageClient.deleteStoredData(account.getUuid());
       final CompletableFuture<Void> deleteBackupServiceDataFuture = secureBackupClient.deleteBackups(account.getUuid());
@@ -355,9 +354,9 @@ public class AccountsManager {
         }
       }
 
-      if (Constants.DYNAMO_DB) deletedAccounts.put(account.getUuid(), account.getNumber());
+      if (Constants.DYNAMO_DB) deletedAccountsManager.put(account.getUuid(), account.getNumber());
 
-    } catch (final Exception e) {
+    } catch (final RuntimeException | InterruptedException e) {
       logger.warn("Failed to delete account", e);
 
       Metrics.counter(DELETE_ERROR_COUNTER_NAME,

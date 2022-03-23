@@ -6,6 +6,10 @@ package org.whispersystems.textsecuregcm;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
+import com.amazonaws.ClientConfiguration;
+import com.amazonaws.auth.InstanceProfileCredentialsProvider;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.codahale.metrics.SharedMetricRegistries;
 import com.codahale.metrics.jdbi3.strategies.DefaultNameStrategy;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
@@ -154,6 +158,7 @@ import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.ActiveUserCounter;
 import org.whispersystems.textsecuregcm.storage.DeletedAccounts;
 import org.whispersystems.textsecuregcm.storage.DeletedAccountsDirectoryReconciler;
+import org.whispersystems.textsecuregcm.storage.DeletedAccountsManager;
 import org.whispersystems.textsecuregcm.storage.DeletedAccountsTableCrawler;
 import org.whispersystems.textsecuregcm.storage.DirectoryManager;
 import org.whispersystems.textsecuregcm.storage.DirectoryReconciler;
@@ -363,6 +368,13 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     DynamoDbClient pendingDevicesDynamoDbClient = DynamoDbFromConfig.client(config.getPendingDevicesDynamoDbConfiguration(),
         software.amazon.awssdk.auth.credentials.InstanceProfileCredentialsProvider.create());
 
+    AmazonDynamoDB deletedAccountsLockDynamoDbClient = AmazonDynamoDBClientBuilder.standard()
+        .withRegion(config.getDeletedAccountsLockDynamoDbConfiguration().getRegion())
+        .withClientConfiguration(new ClientConfiguration().withClientExecutionTimeout(((int) config.getDeletedAccountsLockDynamoDbConfiguration().getClientExecutionTimeout().toMillis()))
+            .withRequestTimeout((int) config.getDeletedAccountsLockDynamoDbConfiguration().getClientRequestTimeout().toMillis()))
+        .withCredentials(InstanceProfileCredentialsProvider.getInstance())
+        .build();
+
     DeletedAccounts deletedAccounts = Constants.DYNAMO_DB ? new DeletedAccounts(deletedAccountsDynamoDbClient, config.getDeletedAccountsDynamoDbConfiguration().getTableName(), config.getDeletedAccountsDynamoDbConfiguration().getNeedsReconciliationIndexName()) : null;
     MigrationDeletedAccounts migrationDeletedAccounts = Constants.DYNAMO_DB ? new MigrationDeletedAccounts(recentlyDeletedAccountsDynamoDb, config.getMigrationDeletedAccountsDynamoDbConfiguration().getTableName()) : null;
     MigrationRetryAccounts migrationRetryAccounts = Constants.DYNAMO_DB ? new MigrationRetryAccounts(migrationRetryAccountsDynamoDb, config.getMigrationRetryAccountsDynamoDbConfiguration().getTableName()) : null;
@@ -454,7 +466,8 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     PushLatencyManager         pushLatencyManager         = new PushLatencyManager(metricsCluster);
     ReportMessageManager       reportMessageManager       = new ReportMessageManager(reportMessageDynamoDb, Metrics.globalRegistry);
     MessagesManager            messagesManager            = new MessagesManager(messages, messagesDynamoDb, messagesCache, pushLatencyManager, reportMessageManager);
-    AccountsManager            accountsManager            = new AccountsManager(accounts, accountsDynamoDb, directory, cacheCluster, deletedAccounts, directoryQueue, keys, keysDynamoDb, messagesManager, usernamesManager, profilesManager, secureStorageClient, secureBackupClient, experimentEnrollmentManager, dynamicConfigurationManager);
+    DeletedAccountsManager     deletedAccountsManager     = Constants.DYNAMO_DB ? new DeletedAccountsManager(deletedAccounts, deletedAccountsLockDynamoDbClient, config.getDeletedAccountsLockDynamoDbConfiguration().getTableName()) : null;
+    AccountsManager            accountsManager            = new AccountsManager(accounts, accountsDynamoDb, directory, cacheCluster, deletedAccountsManager, directoryQueue, keys, keysDynamoDb, messagesManager, usernamesManager, profilesManager, secureStorageClient, secureBackupClient, experimentEnrollmentManager, dynamicConfigurationManager);
     RemoteConfigsManager       remoteConfigsManager       = new RemoteConfigsManager(remoteConfigs);
     DeadLetterHandler          deadLetterHandler          = new DeadLetterHandler(accountsManager, messagesManager);
     DispatchManager            dispatchManager            = new DispatchManager(pubSubClientFactory, Optional.of(deadLetterHandler));
@@ -510,7 +523,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     AccountDatabaseCrawlerCache accountDatabaseCrawlerCache = new AccountDatabaseCrawlerCache(cacheCluster);
     AccountDatabaseCrawler      accountDatabaseCrawler      = new AccountDatabaseCrawler(accountsManager, accountDatabaseCrawlerCache, accountDatabaseCrawlerListeners, config.getAccountDatabaseCrawlerConfiguration().getChunkSize(), config.getAccountDatabaseCrawlerConfiguration().getChunkIntervalMs(), dynamicConfigurationManager);
 
-    DeletedAccountsTableCrawler deletedAccountsTableCrawler = new DeletedAccountsTableCrawler(deletedAccounts, deletedAccountsDirectoryReconcilers, cacheCluster, recurringJobExecutor);
+    DeletedAccountsTableCrawler deletedAccountsTableCrawler = new DeletedAccountsTableCrawler(deletedAccountsManager, deletedAccountsDirectoryReconcilers, cacheCluster, recurringJobExecutor);
     MigrationRetryAccountsTableCrawler migrationRetryAccountsTableCrawler = new MigrationRetryAccountsTableCrawler(migrationRetryAccounts, accountsManager, accountsDynamoDb, cacheCluster, recurringJobExecutor);
 
     apnSender.setApnFallbackManager(apnFallbackManager);

@@ -149,7 +149,7 @@ class AccountsManagerConcurrentModificationIntegrationTest {
           accountsDynamoDb,
           mock(DirectoryManager.class),
           RedisClusterHelper.buildMockRedisCluster(commands),
-          mock(DeletedAccounts.class),
+          mock(DeletedAccountsManager.class),
           mock(DirectoryQueue.class),
           mock(Keys.class),
           mock(KeysDynamoDb.class),

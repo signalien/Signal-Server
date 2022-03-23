@@ -7,6 +7,10 @@ package org.whispersystems.textsecuregcm.workers;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
+import com.amazonaws.ClientConfiguration;
+import com.amazonaws.auth.InstanceProfileCredentialsProvider;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import io.dropwizard.Application;
 import io.dropwizard.cli.EnvironmentCommand;
@@ -40,6 +44,7 @@ import org.whispersystems.textsecuregcm.storage.AccountsDynamoDb;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.AccountsManager.DeletionReason;
 import org.whispersystems.textsecuregcm.storage.DeletedAccounts;
+import org.whispersystems.textsecuregcm.storage.DeletedAccountsManager;
 import org.whispersystems.textsecuregcm.storage.DirectoryManager;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.FaultTolerantDatabase;
@@ -141,6 +146,13 @@ public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfigura
       DynamoDbClient migrationRetryAccountsDynamoDb = DynamoDbFromConfig.client(configuration.getMigrationRetryAccountsDynamoDbConfiguration(),
           software.amazon.awssdk.auth.credentials.InstanceProfileCredentialsProvider.create());
 
+      AmazonDynamoDB deletedAccountsLockDynamoDbClient = AmazonDynamoDBClientBuilder.standard()
+          .withRegion(configuration.getDeletedAccountsLockDynamoDbConfiguration().getRegion())
+          .withClientConfiguration(new ClientConfiguration().withClientExecutionTimeout(((int) configuration.getDeletedAccountsLockDynamoDbConfiguration().getClientExecutionTimeout().toMillis()))
+              .withRequestTimeout((int) configuration.getDeletedAccountsLockDynamoDbConfiguration().getClientRequestTimeout().toMillis()))
+          .withCredentials(InstanceProfileCredentialsProvider.getInstance())
+          .build();
+
       DeletedAccounts deletedAccounts = Constants.DYNAMO_DB ? new DeletedAccounts(deletedAccountsDynamoDbClient, configuration.getDeletedAccountsDynamoDbConfiguration().getTableName(), configuration.getDeletedAccountsDynamoDbConfiguration().getNeedsReconciliationIndexName()) : null;
       MigrationDeletedAccounts migrationDeletedAccounts = Constants.DYNAMO_DB ? new MigrationDeletedAccounts(migrationDeletedAccountsDynamoDb, configuration.getMigrationDeletedAccountsDynamoDbConfiguration().getTableName()) : null;
       MigrationRetryAccounts migrationRetryAccounts = Constants.DYNAMO_DB ? new MigrationRetryAccounts(migrationRetryAccountsDynamoDb, configuration.getMigrationRetryAccountsDynamoDbConfiguration().getTableName()) : null;
@@ -169,7 +181,8 @@ public class DeleteUserCommand extends EnvironmentCommand<WhisperServerConfigura
       ReportMessageDynamoDb     reportMessageDynamoDb = Constants.DYNAMO_DB ? new ReportMessageDynamoDb(reportMessagesDynamoDb, configuration.getReportMessageDynamoDbConfiguration().getTableName()) : null;
       ReportMessageManager      reportMessageManager = new ReportMessageManager(reportMessageDynamoDb, Metrics.globalRegistry);
       MessagesManager           messagesManager      = new MessagesManager(messages, messagesDynamoDb, messagesCache, pushLatencyManager, reportMessageManager);
-      AccountsManager           accountsManager      = new AccountsManager(accounts, accountsDynamoDb, directory, cacheCluster, deletedAccounts, directoryQueue, keys, keysDynamoDb, messagesManager, usernamesManager, profilesManager, secureStorageClient, secureBackupClient, experimentEnrollmentManager, dynamicConfigurationManager);
+      DeletedAccountsManager    deletedAccountsManager = Constants.DYNAMO_DB ? new DeletedAccountsManager(deletedAccounts, deletedAccountsLockDynamoDbClient, configuration.getDeletedAccountsLockDynamoDbConfiguration().getTableName()) : null;
+      AccountsManager           accountsManager      = new AccountsManager(accounts, accountsDynamoDb, directory, cacheCluster, deletedAccountsManager, directoryQueue, keys, keysDynamoDb, messagesManager, usernamesManager, profilesManager, secureStorageClient, secureBackupClient, experimentEnrollmentManager, dynamicConfigurationManager);
 
       for (String user: users) {
         Optional<Account> account = accountsManager.get(user);

@@ -167,6 +167,11 @@ public class WhisperServerConfiguration extends Configuration {
   @Valid
   @NotNull
   @JsonProperty
+  private DynamoDbConfiguration deletedAccountsLockDynamoDb;
+
+  @Valid
+  @NotNull
+  @JsonProperty
   private DynamoDbConfiguration pushChallengeDynamoDb;
 
   @Valid
@@ -395,6 +400,10 @@ public class WhisperServerConfiguration extends Configuration {
 
   public DeletedAccountsDynamoDbConfiguration getDeletedAccountsDynamoDbConfiguration() {
     return deletedAccountsDynamoDb;
+  }
+
+  public DynamoDbConfiguration getDeletedAccountsLockDynamoDbConfiguration() {
+    return deletedAccountsLockDynamoDb;
   }
 
   public DatabaseConfiguration getMessageStoreConfiguration() {
