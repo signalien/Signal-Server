@@ -63,7 +63,7 @@ import org.whispersystems.textsecuregcm.push.APNSender;
 import org.whispersystems.textsecuregcm.push.ApnMessage;
 import org.whispersystems.textsecuregcm.push.GCMSender;
 import org.whispersystems.textsecuregcm.push.GcmMessage;
-import org.whispersystems.textsecuregcm.recaptcha.RecaptchaClient;
+import org.whispersystems.textsecuregcm.recaptcha.LegacyRecaptchaClient;
 import org.whispersystems.textsecuregcm.sms.SmsSender;
 import org.whispersystems.textsecuregcm.sms.TwilioVerifyExperimentEnrollmentManager;
 import org.whispersystems.textsecuregcm.storage.AbusiveHostRule;
@@ -73,7 +73,6 @@ import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.PendingAccountsManager;
-import org.whispersystems.textsecuregcm.storage.StoredVerificationCodeManager;
 import org.whispersystems.textsecuregcm.storage.UsernamesManager;
 import org.whispersystems.textsecuregcm.util.Constants;
 import org.whispersystems.textsecuregcm.util.ForwardedIpUtil;
@@ -118,7 +117,7 @@ public class AccountController {
   private final DynamicConfigurationManager        dynamicConfigurationManager;
   private final TurnTokenGenerator                 turnTokenGenerator;
   private final Map<String, Integer>               testDevices;
-  private final RecaptchaClient                    recaptchaClient;
+  private final LegacyRecaptchaClient              legacyRecaptchaClient;
   private final GCMSender                          gcmSender;
   private final APNSender                          apnSender;
   private final ExternalServiceCredentialGenerator backupServiceCredentialGenerator;
@@ -135,7 +134,7 @@ public class AccountController {
                            DynamicConfigurationManager dynamicConfigurationManager,
                            TurnTokenGenerator turnTokenGenerator,
                            Map<String, Integer> testDevices,
-                           RecaptchaClient recaptchaClient,
+                           LegacyRecaptchaClient legacyRecaptchaClient,
                            GCMSender gcmSender,
                            APNSender apnSender,
                            ExternalServiceCredentialGenerator backupServiceCredentialGenerator,
@@ -150,7 +149,7 @@ public class AccountController {
     this.dynamicConfigurationManager       = dynamicConfigurationManager;
     this.testDevices                       = testDevices;
     this.turnTokenGenerator                = turnTokenGenerator;
-    this.recaptchaClient                   = recaptchaClient;
+    this.legacyRecaptchaClient             = legacyRecaptchaClient;
     this.gcmSender                         = gcmSender;
     this.apnSender                         = apnSender;
     this.backupServiceCredentialGenerator  = backupServiceCredentialGenerator;
@@ -598,7 +597,7 @@ public class AccountController {
   {
 
     if (captchaToken.isPresent()) {
-      boolean validToken = recaptchaClient.verify(captchaToken.get(), requester);
+      boolean validToken = legacyRecaptchaClient.verify(captchaToken.get(), requester);
 
       if (validToken) {
         captchaSuccessMeter.mark();

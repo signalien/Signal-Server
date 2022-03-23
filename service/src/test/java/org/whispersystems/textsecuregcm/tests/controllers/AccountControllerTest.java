@@ -75,7 +75,7 @@ import org.whispersystems.textsecuregcm.push.APNSender;
 import org.whispersystems.textsecuregcm.push.ApnMessage;
 import org.whispersystems.textsecuregcm.push.GCMSender;
 import org.whispersystems.textsecuregcm.push.GcmMessage;
-import org.whispersystems.textsecuregcm.recaptcha.RecaptchaClient;
+import org.whispersystems.textsecuregcm.recaptcha.LegacyRecaptchaClient;
 import org.whispersystems.textsecuregcm.sms.SmsSender;
 import org.whispersystems.textsecuregcm.sms.TwilioVerifyExperimentEnrollmentManager;
 import org.whispersystems.textsecuregcm.storage.AbusiveHostRule;
@@ -133,7 +133,7 @@ class AccountControllerTest {
   private static Account                senderRegLockAccount   = mock(Account.class);
   private static Account                senderHasStorage       = mock(Account.class);
   private static Account                senderTransfer         = mock(Account.class);
-  private static RecaptchaClient        recaptchaClient        = mock(RecaptchaClient.class);
+  private static LegacyRecaptchaClient  legacyRecaptchaClient  = mock(LegacyRecaptchaClient.class);
   private static GCMSender              gcmSender              = mock(GCMSender.class);
   private static APNSender              apnSender              = mock(APNSender.class);
   private static UsernamesManager       usernamesManager       = mock(UsernamesManager.class);
@@ -162,7 +162,7 @@ class AccountControllerTest {
                                                                                                dynamicConfigurationManager,
                                                                                                turnTokenGenerator,
                                                                                                new HashMap<>(),
-                                                                                               recaptchaClient,
+                                                                                               legacyRecaptchaClient,
                                                                                                gcmSender,
                                                                                                apnSender,
                                                                                                storageCredentialGenerator,
@@ -243,8 +243,8 @@ class AccountControllerTest {
     when(abusiveHostRules.getAbusiveHostRulesFor(eq(RESTRICTED_HOST))).thenReturn(Collections.singletonList(new AbusiveHostRule(RESTRICTED_HOST, false, Collections.singletonList("+123"))));
     when(abusiveHostRules.getAbusiveHostRulesFor(eq(NICE_HOST))).thenReturn(Collections.emptyList());
 
-    when(recaptchaClient.verify(eq(INVALID_CAPTCHA_TOKEN), anyString())).thenReturn(false);
-    when(recaptchaClient.verify(eq(VALID_CAPTCHA_TOKEN), anyString())).thenReturn(true);
+    when(legacyRecaptchaClient.verify(eq(INVALID_CAPTCHA_TOKEN), anyString())).thenReturn(false);
+    when(legacyRecaptchaClient.verify(eq(VALID_CAPTCHA_TOKEN), anyString())).thenReturn(true);
 
     doThrow(new RateLimitExceededException(SENDER_OVER_PIN, Duration.ZERO)).when(pinLimiter).validate(eq(SENDER_OVER_PIN));
 
@@ -275,7 +275,7 @@ class AccountControllerTest {
         senderRegLockAccount,
         senderHasStorage,
         senderTransfer,
-        recaptchaClient,
+        legacyRecaptchaClient,
         gcmSender,
         apnSender,
         usernamesManager,
@@ -713,7 +713,7 @@ class AccountControllerTest {
     assertThat(response.getStatus()).isEqualTo(200);
 
     verifyNoMoreInteractions(abusiveHostRules);
-    verify(recaptchaClient).verify(eq(VALID_CAPTCHA_TOKEN), eq(ABUSIVE_HOST));
+    verify(legacyRecaptchaClient).verify(eq(VALID_CAPTCHA_TOKEN), eq(ABUSIVE_HOST));
     if (enrolledInVerifyExperiment) {
       verify(smsSender).deliverSmsVerificationWithTwilioVerify(eq(SENDER), eq(Optional.empty()), anyString(),
           eq(Collections.emptyList()));
@@ -744,7 +744,7 @@ class AccountControllerTest {
     assertThat(response.getStatus()).isEqualTo(402);
 
     verifyNoMoreInteractions(abusiveHostRules);
-    verify(recaptchaClient).verify(eq(INVALID_CAPTCHA_TOKEN), eq(ABUSIVE_HOST));
+    verify(legacyRecaptchaClient).verify(eq(INVALID_CAPTCHA_TOKEN), eq(ABUSIVE_HOST));
     verifyNoMoreInteractions(smsSender);
   }
 
@@ -774,7 +774,7 @@ class AccountControllerTest {
     verify(abusiveHostRules).setBlockedHost(eq(RATE_LIMITED_IP_HOST), eq("Auto-Block"));
     verifyNoMoreInteractions(abusiveHostRules);
 
-    verifyNoMoreInteractions(recaptchaClient);
+    verifyNoMoreInteractions(legacyRecaptchaClient);
     verifyNoMoreInteractions(smsSender);
   }
 
@@ -804,7 +804,7 @@ class AccountControllerTest {
     verify(abusiveHostRules).setBlockedHost(eq(RATE_LIMITED_PREFIX_HOST), eq("Auto-Block"));
     verifyNoMoreInteractions(abusiveHostRules);
 
-    verifyNoMoreInteractions(recaptchaClient);
+    verifyNoMoreInteractions(legacyRecaptchaClient);
     verifyNoMoreInteractions(smsSender);
   }
 
@@ -833,7 +833,7 @@ class AccountControllerTest {
     verify(abusiveHostRules).getAbusiveHostRulesFor(eq(RATE_LIMITED_HOST2));
     verifyNoMoreInteractions(abusiveHostRules);
 
-    verifyNoMoreInteractions(recaptchaClient);
+    verifyNoMoreInteractions(legacyRecaptchaClient);
     verifyNoMoreInteractions(smsSender);
   }
 
