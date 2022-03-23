@@ -30,6 +30,7 @@ import org.whispersystems.textsecuregcm.configuration.PaymentsServiceConfigurati
 import org.whispersystems.textsecuregcm.configuration.PushConfiguration;
 import org.whispersystems.textsecuregcm.configuration.RateLimitsConfiguration;
 import org.whispersystems.textsecuregcm.configuration.RecaptchaConfiguration;
+import org.whispersystems.textsecuregcm.configuration.RecaptchaV2Configuration;
 import org.whispersystems.textsecuregcm.configuration.RedisClusterConfiguration;
 import org.whispersystems.textsecuregcm.configuration.RedisConfiguration;
 import org.whispersystems.textsecuregcm.configuration.RemoteConfigConfiguration;
@@ -262,6 +263,11 @@ public class WhisperServerConfiguration extends Configuration {
   @Valid
   @NotNull
   @JsonProperty
+  private RecaptchaV2Configuration recaptchaV2;
+
+  @Valid
+  @NotNull
+  @JsonProperty
   private SecureStorageServiceConfiguration storageService;
 
   @Valid
@@ -308,6 +314,10 @@ public class WhisperServerConfiguration extends Configuration {
 
   public RecaptchaConfiguration getRecaptchaConfiguration() {
     return recaptcha;
+  }
+
+  public RecaptchaV2Configuration getRecaptchaV2Configuration() {
+    return recaptchaV2;
   }
 
   public VoiceVerificationConfiguration getVoiceVerificationConfiguration() {
