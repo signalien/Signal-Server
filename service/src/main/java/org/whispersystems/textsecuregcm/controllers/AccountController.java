@@ -229,10 +229,6 @@ public class AccountController {
       throw new WebApplicationException(Response.status(400).build());
     }
 
-    if (number.startsWith("+98")) {
-      transport = "voice";
-    }
-
     String requester = ForwardedIpUtil.getMostRecentProxy(forwardedFor).orElseThrow();
 
     Optional<StoredVerificationCode> storedChallenge = pendingAccounts.getCodeForNumber(number);
