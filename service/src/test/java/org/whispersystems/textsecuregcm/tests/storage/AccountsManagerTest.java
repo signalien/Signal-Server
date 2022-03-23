@@ -546,7 +546,7 @@ class AccountsManagerTest {
     when(accounts.create(any())).thenReturn(true);
 
     final String e164 = "+18005550123";
-    final AccountAttributes attributes = new AccountAttributes(false, 0, null, null, null, true, null);
+    final AccountAttributes attributes = new AccountAttributes(false, 0, null, null, true, null);
     accountsManager.create(e164, "password", null, attributes);
 
     verify(accounts).create(argThat(account -> e164.equals(account.getNumber())));
@@ -565,7 +565,7 @@ class AccountsManagerTest {
     });
 
     final String e164 = "+18005550123";
-    final AccountAttributes attributes = new AccountAttributes(false, 0, null, null, null, true, null);
+    final AccountAttributes attributes = new AccountAttributes(false, 0, null, null, true, null);
     accountsManager.create(e164, "password", null, attributes);
 
     verify(accounts).create(argThat(account -> e164.equals(account.getNumber()) && existingUuid.equals(account.getUuid())));
@@ -587,7 +587,7 @@ class AccountsManagerTest {
     when(accounts.create(any())).thenReturn(true);
 
     final String e164 = "+18005550123";
-    final AccountAttributes attributes = new AccountAttributes(false, 0, null, null, null, true, null);
+    final AccountAttributes attributes = new AccountAttributes(false, 0, null, null, true, null);
     accountsManager.create(e164, "password", null, attributes);
 
     verify(accounts).create(argThat(account -> e164.equals(account.getNumber()) && recentlyDeletedUuid.equals(account.getUuid())));
@@ -599,7 +599,7 @@ class AccountsManagerTest {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testCreateWithDiscoverability(final boolean discoverable) throws InterruptedException {
-    final AccountAttributes attributes = new AccountAttributes(false, 0, null, null, null, discoverable, null);
+    final AccountAttributes attributes = new AccountAttributes(false, 0, null, null, discoverable, null);
     final Account account = accountsManager.create("+18005550123", "password", null, attributes);
 
     assertEquals(discoverable, account.isDiscoverableByPhoneNumber());
@@ -612,7 +612,7 @@ class AccountsManagerTest {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testCreateWithStorageCapability(final boolean hasStorage) throws InterruptedException {
-    final AccountAttributes attributes = new AccountAttributes(false, 0, null, null, null, true,
+    final AccountAttributes attributes = new AccountAttributes(false, 0, null, null, true,
         new DeviceCapabilities(false, false, false, hasStorage, false, false, false, false));
 
     final Account account = accountsManager.create("+18005550123", "password", null, attributes);

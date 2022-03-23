@@ -219,7 +219,6 @@ class AccountsManagerConcurrentModificationIntegrationTest {
         modifyAccount(uuid, account -> account.setCurrentProfileVersion(currentProfileVersion)),
         modifyAccount(uuid, account -> account.setIdentityKey(identityKey)),
         modifyAccount(uuid, account -> account.setUnidentifiedAccessKey(unidentifiedAccessKey)),
-        modifyAccount(uuid, account -> account.setPin(pin)),
         modifyAccount(uuid, account -> account.setRegistrationLock(credentials.getHashedAuthenticationToken(), credentials.getSalt())),
         modifyAccount(uuid, account -> account.setUnrestrictedUnidentifiedAccess(unrestrictedUnidentifiedAccess)),
         modifyDevice(uuid, Device.MASTER_ID, device-> device.setLastSeen(lastSeen)),
@@ -261,7 +260,7 @@ class AccountsManagerConcurrentModificationIntegrationTest {
         () -> assertEquals(currentProfileVersion, account.getCurrentProfileVersion().get()),
         () -> assertEquals(identityKey, account.getIdentityKey()),
         () -> assertArrayEquals(unidentifiedAccessKey, account.getUnidentifiedAccessKey().get()),
-        () -> assertTrue(account.getRegistrationLock().verify(clientRegistrationLock, pin)),
+        () -> assertTrue(account.getRegistrationLock().verify(clientRegistrationLock)),
         () -> assertEquals(unrestrictedUnidentifiedAcces, account.isUnrestrictedUnidentifiedAccess())
     );
   }
