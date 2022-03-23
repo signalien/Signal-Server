@@ -23,6 +23,8 @@ import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.Device.DeviceCapabilities;
+import org.whispersystems.textsecuregcm.storage.Keys;
+import org.whispersystems.textsecuregcm.storage.KeysDynamoDb;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
 import org.whispersystems.textsecuregcm.storage.PendingDevicesManager;
 import org.whispersystems.textsecuregcm.storage.StoredVerificationCodeManager;
@@ -61,6 +63,8 @@ public class DeviceController {
   private final PendingDevicesManager pendingDevices;
   private final AccountsManager       accounts;
   private final MessagesManager       messages;
+  private final Keys                  keysLegacy;
+  private final KeysDynamoDb          keys;
   private final RateLimiters          rateLimiters;
   private final Map<String, Integer>  maxDeviceConfiguration;
   private final DirectoryQueue        directoryQueue;
@@ -69,6 +73,8 @@ public class DeviceController {
   public DeviceController(PendingDevicesManager pendingDevices,
                           AccountsManager accounts,
                           MessagesManager messages,
+                          Keys keysLegacy,
+                          KeysDynamoDb keys,
                           DirectoryQueue directoryQueue,
                           RateLimiters rateLimiters,
                           Map<String, Integer> maxDeviceConfiguration)
@@ -76,6 +82,8 @@ public class DeviceController {
     this.pendingDevices         = pendingDevices;
     this.accounts               = accounts;
     this.messages               = messages;
+    this.keysLegacy             = keysLegacy;
+    this.keys                   = keys;
     this.directoryQueue         = directoryQueue;
     this.rateLimiters           = rateLimiters;
     this.maxDeviceConfiguration = maxDeviceConfiguration;
@@ -108,8 +116,10 @@ public class DeviceController {
     directoryQueue.refreshRegisteredUser(account);
     // ensure any messages that came in after the first clear() are also removed
     if (Constants.DYNAMO_DB) {
+      keys.delete(account, deviceId);
       messages.clear(account.getUuid(), deviceId);
     } else {
+      keysLegacy.delete(account, deviceId);
       messages.clear(account.getNumber(), account.getUuid(), deviceId);
     }
   }

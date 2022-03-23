@@ -150,6 +150,19 @@ public class Keys implements PreKeyStore {
     }));
   }
 
+  public void delete(final Account account, final long deviceId) {
+    final String number = account.getNumber();
+
+    database.use(jdbi -> jdbi.useHandle(handle -> {
+      try (Timer.Context ignored = getCountTimer.time()) {
+        handle.createUpdate("DELETE FROM keys WHERE number = :number AND device_id = :device_id")
+              .bind("number", number)
+              .bind("device_id", deviceId)
+              .execute();
+      }
+    }));
+  }
+
   public void vacuum() {
     database.use(jdbi -> jdbi.useHandle(handle -> {
       try (Timer.Context ignored = vacuumTimer.time()) {

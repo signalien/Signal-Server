@@ -7,6 +7,7 @@ package org.whispersystems.textsecuregcm.tests.controllers;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
@@ -45,6 +46,8 @@ import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.Device.DeviceCapabilities;
+import org.whispersystems.textsecuregcm.storage.Keys;
+import org.whispersystems.textsecuregcm.storage.KeysDynamoDb;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
 import org.whispersystems.textsecuregcm.storage.PendingDevicesManager;
 import org.whispersystems.textsecuregcm.storage.StoredVerificationCodeManager;
@@ -60,11 +63,13 @@ public class DeviceControllerTest {
     public DumbVerificationDeviceController(PendingDevicesManager pendingDevices,
                                             AccountsManager accounts,
                                             MessagesManager messages,
+                                            Keys keysLegacy,
+                                            KeysDynamoDb keys,
                                             DirectoryQueue cdsSender,
                                             RateLimiters rateLimiters,
                                             Map<String, Integer> deviceConfiguration)
     {
-      super(pendingDevices, accounts, messages, cdsSender, rateLimiters, deviceConfiguration);
+      super(pendingDevices, accounts, messages, keysLegacy, keys, cdsSender, rateLimiters, deviceConfiguration);
     }
 
     @Override
@@ -77,6 +82,8 @@ public class DeviceControllerTest {
   private PendingDevicesManager pendingDevicesManager = mock(PendingDevicesManager.class);
   private AccountsManager       accountsManager       = mock(AccountsManager.class       );
   private MessagesManager       messagesManager       = mock(MessagesManager.class);
+  private Keys                  keysLegacy            = mock(Keys.class);
+  private KeysDynamoDb          keys                  = mock(KeysDynamoDb.class);
   private DirectoryQueue        directoryQueue        = mock(DirectoryQueue.class);
   private RateLimiters          rateLimiters          = mock(RateLimiters.class          );
   private RateLimiter           rateLimiter           = mock(RateLimiter.class           );
@@ -97,6 +104,8 @@ public class DeviceControllerTest {
                                                             .addResource(new DumbVerificationDeviceController(pendingDevicesManager,
                                                                                                               accountsManager,
                                                                                                               messagesManager,
+                                                                                                              keysLegacy,
+                                                                                                              keys,
                                                                                                               directoryQueue,
                                                                                                               rateLimiters,
                                                                                                               deviceConfiguration))
@@ -348,7 +357,7 @@ public class DeviceControllerTest {
   }
 
   @Test
-  public void deviceRemovalClearsMessages() {
+  public void deviceRemovalClearsMessagesAndKeys() {
 
     // this is a static mock, so it might have previous invocations
     clearInvocations(AuthHelper.VALID_ACCOUNT);
@@ -368,6 +377,9 @@ public class DeviceControllerTest {
     verify(messagesManager, times(2)).clear(AuthHelper.VALID_UUID, deviceId);
     verify(accountsManager, times(1)).update(eq(AuthHelper.VALID_ACCOUNT), any());
     verify(AuthHelper.VALID_ACCOUNT).removeDevice(deviceId);
+
+    // The account instance may have changed as part of a call to `AccountManager#update`
+    verify(keys).delete(argThat(account -> account.getUuid().equals(AuthHelper.VALID_UUID)), eq(deviceId));
   }
 
 }
