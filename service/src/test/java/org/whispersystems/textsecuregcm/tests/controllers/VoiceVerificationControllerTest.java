@@ -27,7 +27,7 @@ import io.dropwizard.testing.FixtureHelpers;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @ExtendWith(DropwizardExtensionsSupport.class)
-public class VoiceVerificationControllerTest {
+class VoiceVerificationControllerTest {
 
   private static final ResourceExtension resources = ResourceExtension.builder()
                                                             .addProvider(AuthHelper.getAuthFilter())
