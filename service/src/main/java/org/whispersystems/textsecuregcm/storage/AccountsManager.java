@@ -432,7 +432,7 @@ public class AccountsManager {
         }
       }
 
-      if (Constants.DYNAMO_DB) deletedAccountsManager.put(account.getUuid(), account.getNumber());
+      if (Constants.DYNAMO_DB) deletedAccountsManager.addRecentlyDeletedAccount(account.getUuid(), account.getNumber());
 
     } catch (final RuntimeException | InterruptedException e) {
       logger.warn("Failed to delete account", e);
