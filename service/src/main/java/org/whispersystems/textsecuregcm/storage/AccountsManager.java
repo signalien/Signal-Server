@@ -217,6 +217,7 @@ public class AccountsManager {
 
       if (freshUser) {
         tags = Tags.of("type", "new");
+        newUserMeter.mark();
       } else {
         tags = Tags.of("type", "reregister");
       }
