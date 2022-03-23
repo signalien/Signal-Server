@@ -464,47 +464,60 @@ public class AccountsManager {
 
   public void delete(final Account account, final DeletionReason deletionReason) throws InterruptedException {
     try (final Timer.Context ignored = deleteTimer.time()) {
-      final CompletableFuture<Void> deleteStorageServiceDataFuture = secureStorageClient.deleteStoredData(account.getUuid());
-      final CompletableFuture<Void> deleteBackupServiceDataFuture = secureBackupClient.deleteBackups(account.getUuid());
-
-      usernamesManager.delete(account.getUuid());
-      directoryQueue.deleteAccount(account);
-      directory.remove(account.getNumber());
-      profilesManager.deleteAll(account.getUuid());
       if (Constants.DYNAMO_DB) {
-        keysDynamoDb.delete(account.getUuid());
-        messagesManager.clear(account.getUuid());
+        deletedAccountsManager.lockAndPut(account.getNumber(), () -> {
+          final CompletableFuture<Void> deleteStorageServiceDataFuture = secureStorageClient.deleteStoredData(account.getUuid());
+          final CompletableFuture<Void> deleteBackupServiceDataFuture = secureBackupClient.deleteBackups(account.getUuid());
+
+          usernamesManager.delete(account.getUuid());
+          directoryQueue.deleteAccount(account);
+          profilesManager.deleteAll(account.getUuid());
+          keysDynamoDb.delete(account.getUuid());
+          messagesManager.clear(account.getUuid());
+
+          deleteStorageServiceDataFuture.join();
+          deleteBackupServiceDataFuture.join();
+
+          redisDelete(account);
+          databaseDelete(account);
+
+          if (dynamoDeleteEnabled()) {
+            try {
+              dynamoDelete(account);
+            } catch (final Exception e) {
+              logger.error("Could not delete account {} from dynamo", account.getUuid().toString());
+              Metrics.counter(DYNAMO_MIGRATION_ERROR_COUNTER_NAME, "action", "delete").increment();
+            }
+          }
+
+          return account.getUuid();
+        });
       } else {
+        final CompletableFuture<Void> deleteStorageServiceDataFuture = secureStorageClient.deleteStoredData(account.getUuid());
+        final CompletableFuture<Void> deleteBackupServiceDataFuture = secureBackupClient.deleteBackups(account.getUuid());
+
+        usernamesManager.delete(account.getUuid());
+        directoryQueue.deleteAccount(account);
+        directory.remove(account.getNumber());
+        profilesManager.deleteAll(account.getUuid());
         keys.delete(account);
         messagesManager.clear(account.getNumber(), account.getUuid());
+
+        deleteStorageServiceDataFuture.join();
+        deleteBackupServiceDataFuture.join();
+
+        redisDelete(account);
+        databaseDelete(account);
       }
-
-      deleteStorageServiceDataFuture.join();
-      deleteBackupServiceDataFuture.join();
-
-      redisDelete(account);
-      databaseDelete(account);
-
-      if (dynamoDeleteEnabled()) {
-        try {
-          dynamoDelete(account);
-        } catch (final Exception e) {
-          logger.error("Could not delete account {} from dynamo", account.getUuid().toString());
-          Metrics.counter(DYNAMO_MIGRATION_ERROR_COUNTER_NAME, "action", "delete").increment();
-        }
-      }
-
-      if (Constants.DYNAMO_DB) deletedAccountsManager.addRecentlyDeletedAccount(account.getUuid(), account.getNumber());
-
     } catch (final RuntimeException | InterruptedException e) {
       logger.warn("Failed to delete account", e);
       throw e;
     }
 
     Metrics.counter(DELETE_COUNTER_NAME,
-                    COUNTRY_CODE_TAG_NAME,    Util.getCountryCode(account.getNumber()),
-                    DELETION_REASON_TAG_NAME, deletionReason.tagValue)
-           .increment();
+        COUNTRY_CODE_TAG_NAME, Util.getCountryCode(account.getNumber()),
+        DELETION_REASON_TAG_NAME, deletionReason.tagValue)
+        .increment();
   }
 
   private void updateDirectory(Account account) {
