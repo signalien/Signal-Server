@@ -707,10 +707,6 @@ public class AccountsManager {
       return Optional.of("number");
     }
 
-    if (databaseAccount.getVersion() != dynamoAccount.getVersion()) {
-      return Optional.of("version");
-    }
-
     if (!Objects.equals(databaseAccount.getIdentityKey(), dynamoAccount.getIdentityKey())) {
       return Optional.of("identityKey");
     }
@@ -747,19 +743,25 @@ public class AccountsManager {
       return Optional.of("discoverableByPhoneNumber");
     }
 
-    try {
-      if (databaseAccount.getMasterDevice().isPresent() && dynamoAccount.getMasterDevice().isPresent()) {
-        if (!Objects.equals(databaseAccount.getMasterDevice().get().getSignedPreKey(), dynamoAccount.getMasterDevice().get().getSignedPreKey())) {
-          return Optional.of("masterDeviceSignedPreKey");
-        }
-
-        if (!Objects.equals(databaseAccount.getMasterDevice().get().getPushTimestamp(), dynamoAccount.getMasterDevice().get().getPushTimestamp())) {
-          return Optional.of("masterDevicePushTimestamp");
-        }
+    if (databaseAccount.getMasterDevice().isPresent() && dynamoAccount.getMasterDevice().isPresent()) {
+      if (!Objects.equals(databaseAccount.getMasterDevice().get().getSignedPreKey(),
+          dynamoAccount.getMasterDevice().get().getSignedPreKey())) {
+        return Optional.of("masterDeviceSignedPreKey");
       }
 
+      if (!Objects.equals(databaseAccount.getMasterDevice().get().getPushTimestamp(),
+          dynamoAccount.getMasterDevice().get().getPushTimestamp())) {
+        return Optional.of("masterDevicePushTimestamp");
+      }
+    }
+
+    try {
       if (!serializedEquals(databaseAccount.getDevices(), dynamoAccount.getDevices())) {
         return Optional.of("devices");
+      }
+
+      if (databaseAccount.getVersion() != dynamoAccount.getVersion()) {
+        return Optional.of("version");
       }
 
       if (!serializedEquals(databaseAccount, dynamoAccount)) {
