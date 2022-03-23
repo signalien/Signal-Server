@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,6 +24,7 @@ import io.lettuce.core.cluster.api.sync.RedisAdvancedClusterCommands;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -85,7 +87,7 @@ class AccountsManagerConcurrentModificationIntegrationTest {
   private Executor mutationExecutor = new ThreadPoolExecutor(20, 20, 5, TimeUnit.SECONDS, new LinkedBlockingDeque<>(20));
 
   @BeforeEach
-  void setup() {
+  void setup() throws InterruptedException {
 
     {
       CreateTableRequest createNumbersTableRequest = CreateTableRequest.builder()
@@ -142,12 +144,20 @@ class AccountsManagerConcurrentModificationIntegrationTest {
 
       commands = mock(RedisAdvancedClusterCommands.class);
 
+      final DeletedAccountsManager deletedAccountsManager = mock(DeletedAccountsManager.class);
+
+      doAnswer(invocation -> {
+        //noinspection unchecked
+        invocation.getArgument(1, Consumer.class).accept(Optional.empty());
+        return null;
+      }).when(deletedAccountsManager).lockAndTake(anyString(), any());
+
       accountsManager = new AccountsManager(
           accounts,
           accountsDynamoDb,
           mock(DirectoryManager.class),
           RedisClusterHelper.buildMockRedisCluster(commands),
-          mock(DeletedAccountsManager.class),
+          deletedAccountsManager,
           mock(DirectoryQueue.class),
           mock(Keys.class),
           mock(KeysDynamoDb.class),
@@ -163,7 +173,7 @@ class AccountsManagerConcurrentModificationIntegrationTest {
   }
 
   @Test
-  void testConcurrentUpdate() throws IOException {
+  void testConcurrentUpdate() throws IOException, InterruptedException {
 
     final UUID uuid;
     {
