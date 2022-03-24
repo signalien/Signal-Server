@@ -9,9 +9,8 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 11
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v1
         with:
-          distribution: 'adopt'
           java-version: 11
       - name: Cache local Maven repository
         uses: actions/cache@v2
@@ -21,4 +20,4 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
       - name: Build with Maven
-        run: mvn -e -B verify
+        run: mvn -e -B package
